@@ -10,6 +10,7 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
+        yes | pip install python-dotenv
         sudo python3 app.py
     elif command -v pacman >/dev/null 2>&1; then
         echo
@@ -24,6 +25,7 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
+        yes | pip install python-dotenv
         sudo python3 app.py
     else
         echo "OS not supported"
