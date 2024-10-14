@@ -10,13 +10,14 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
+        yes | pip install mysql-connector-python
         sudo python3 app.py
     elif command -v pacman >/dev/null 2>&1; then
+        # Arch Based
         echo
         echo Welcome to $(grep -oP '^NAME="\K[^"]+' /etc/os-release).
         echo To run this script, you need to be root.
         echo
-        # Arch Based
         yes | sudo pacman -Syu
         yes | sudo pacman -S python3 python-pip python-virtualenv
         yes | sudo pacman -S mariadb-libs  # Ajout de cette ligne
@@ -24,6 +25,7 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
+        yes | pip install mysql-connector-python
         sudo python3 app.py
     else
         echo "OS not supported"
