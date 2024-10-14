@@ -10,11 +10,7 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
-<<<<<<< HEAD
         yes | pip install mysql-connector-python
-=======
-        yes | pip install python-dotenv
->>>>>>> 2bc3a4f5d7968f3021251a47a376dc78888ce76f
         sudo python3 app.py
     elif command -v pacman >/dev/null 2>&1; then
         # Arch Based
@@ -29,11 +25,7 @@ if [ "$(uname)" == "Linux" ]; then
         source venv/bin/activate
         yes | pip install flask
         yes | pip install flask-mysqldb
-<<<<<<< HEAD
         yes | pip install mysql-connector-python
-=======
-        yes | pip install python-dotenv
->>>>>>> 2bc3a4f5d7968f3021251a47a376dc78888ce76f
         sudo python3 app.py
     else
         echo "OS not supported"
