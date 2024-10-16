@@ -48,42 +48,59 @@ try:
 
     # Create tables
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS accounts (
-            id_acc INT AUTO_INCREMENT PRIMARY KEY,
-            email VARCHAR(255),
-            password VARCHAR(64)
-        );
-        CREATE TABLE IF NOT EXISTS user_infos (
-            id_acc INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255),
-            academy VARCHAR(255)
-        );
-        CREATE TABLE IF NOT EXISTS connexions (
-            id_acc INT AUTO_INCREMENT PRIMARY KEY,
-            token BINARY(32) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS quiz (
-            id_file INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255),
-            id_acc INT,
-            subject VARCHAR(255),
-            language VARCHAR(255)
-        );
-        CREATE TABLE IF NOT EXISTS question_posts (
-            id_question INT AUTO_INCREMENT PRIMARY KEY,
-            id_acc INT,
-            subject VARCHAR(255),
-            language VARCHAR(255)
-        );
-        CREATE TABLE IF NOT EXISTS question_contents (
-            id_question INT AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(255),
-            shown_answers TEXT,
-            correct_answers TEXT,
-            duration INT,
-            type VARCHAR(255)
-        );
+    CREATE TABLE IF NOT EXISTS accounts (
+        id_acc INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255),
+        password VARCHAR(64)
+    );
     """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_infos (
+        id_acc INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255),
+        academy VARCHAR(255)
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS connexions (
+        id_acc INT AUTO_INCREMENT PRIMARY KEY,
+        token BINARY(32) NOT NULL
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS quiz (
+        id_file INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255),
+        id_acc INT,
+        subject VARCHAR(255),
+        language VARCHAR(255)
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS question_posts (
+        id_question INT AUTO_INCREMENT PRIMARY KEY,
+        id_acc INT,
+        subject VARCHAR(255),
+        language VARCHAR(255)
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS question_contents (
+        id_question INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255),
+        shown_answers TEXT,
+        correct_answer TEXT,
+        duration INT,
+        type VARCHAR(255)
+    );
+    """)
+
+    # Retrieve the names of all tables in the database
+    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s", (config['database'],))
+    tables = cursor.fetchall()
+
+    # Print the names of all tables
+    print([tables[i][0] for i in range(len(tables))])
 
     # Drop example_table
     cursor.execute("DROP TABLE accounts")
