@@ -46,32 +46,55 @@ try:
     connection = mysql.connector.connect(**config)
     cursor = connection.cursor()
 
-    # Create a table named example_table
+    # Create tables
     cursor.execute("""
-    CREATE TABLE example_table (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        age INT NOT NULL
-    )
+        CREATE TABLE IF NOT EXISTS accounts (
+            id_acc INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255),
+            password VARCHAR(64)
+        );
+        CREATE TABLE IF NOT EXISTS user_infos (
+            id_acc INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255),
+            academy VARCHAR(255)
+        );
+        CREATE TABLE IF NOT EXISTS connexions (
+            id_acc INT AUTO_INCREMENT PRIMARY KEY,
+            token BINARY(32) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS quiz (
+            id_file INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255),
+            id_acc INT,
+            subject VARCHAR(255),
+            language VARCHAR(255)
+        );
+        CREATE TABLE IF NOT EXISTS question_posts (
+            id_question INT AUTO_INCREMENT PRIMARY KEY,
+            id_acc INT,
+            subject VARCHAR(255),
+            language VARCHAR(255)
+        );
+        CREATE TABLE IF NOT EXISTS question_contents (
+            id_question INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255),
+            shown_answers TEXT,
+            correct_answer TEXT,
+            duration INT,
+            type VARCHAR(255)
+        );
     """)
 
-    # Insert some sample data into example_table
-    cursor.execute("INSERT INTO example_table (name, age) VALUES ('Alice', 30)")
-    cursor.execute("INSERT INTO example_table (name, age) VALUES ('Bob', 25)")
-    cursor.execute("INSERT INTO example_table (name, age) VALUES ('Charlie', 35)")
-    connection.commit()
-
-    # Retrieve and print the data from example_table
-    cursor.execute("SELECT * FROM example_table")
-    rows = cursor.fetchall()
-    for row in rows:
-        print(row)
-
     # Drop example_table
-    cursor.execute("DROP TABLE example_table")
+    cursor.execute("DROP TABLE accounts")
+    cursor.execute("DROP TABLE user_infos")
+    cursor.execute("DROP TABLE connexions")
+    cursor.execute("DROP TABLE quiz")
+    cursor.execute("DROP TABLE question_posts")
+    cursor.execute("DROP TABLE question_contents")
 
     # Close the connection
     connection.close()
-    print("Connexion réussie à la base de données MySQL")
+    print("Successfully connected to the MySQL database")
 except mysql.connector.Error as err:
-    print(f"Erreur: {err}")
+    print(f"Error: {err}")
