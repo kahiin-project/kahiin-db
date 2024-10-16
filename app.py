@@ -2,10 +2,10 @@ import os
 import mysql.connector
 import configparser
 
-# Chemin du fichier de configuration
+# Path to the configuration file
 CONFIG_FILE = 'mysql_config.ini'
 
-# Fonction pour lire les informations de connexion
+# Function to read connection information
 def get_mysql_config():
     config = configparser.ConfigParser()
     if os.path.exists(CONFIG_FILE):
@@ -17,10 +17,10 @@ def get_mysql_config():
             'database': config.get('mysql', 'database')
         }
     else:
-        host = input("Hôte MySQL (par défaut: localhost): ") or 'localhost'
-        user = input("Nom d'utilisateur MySQL: ")
-        password = input("Mot de passe MySQL: ")
-        database = input("Nom de la base de données: ")
+        host = input("MySQL Host (default: localhost): ") or 'localhost'
+        user = input("MySQL Username: ")
+        password = input("MySQL Password: ")
+        database = input("Database Name: ")
 
         config.add_section('mysql')
         config.set('mysql', 'host', host)
