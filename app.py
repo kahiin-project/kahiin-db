@@ -79,7 +79,7 @@ try:
             id_question INT AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(255),
             shown_answers TEXT,
-            correct_answer TEXT,
+            correct_answers TEXT,
             duration INT,
             type VARCHAR(255)
         );
