@@ -1,6 +1,10 @@
 import os
 import mysql.connector
 import configparser
+from flask import Flask, request, jsonify
+import mysql.connector
+import configparser
+import os
 
 # Path to the configuration file
 CONFIG_FILE = 'mysql_config.ini'
@@ -103,15 +107,112 @@ try:
     print([tables[i][0] for i in range(len(tables))])
 
     # Drop example_table
-    cursor.execute("DROP TABLE accounts")
-    cursor.execute("DROP TABLE user_infos")
-    cursor.execute("DROP TABLE connexions")
-    cursor.execute("DROP TABLE quiz")
-    cursor.execute("DROP TABLE question_posts")
-    cursor.execute("DROP TABLE question_contents")
+    # cursor.execute("DROP TABLE accounts")
+    # cursor.execute("DROP TABLE user_infos")
+    # cursor.execute("DROP TABLE connexions")
+    # cursor.execute("DROP TABLE quiz")
+    # cursor.execute("DROP TABLE question_posts")
+    # cursor.execute("DROP TABLE question_contents")
 
     # Close the connection
     connection.close()
     print("Successfully connected to the MySQL database")
 except mysql.connector.Error as err:
     print(f"Error: {err}")
+
+
+app = Flask(__name__)
+
+# Function to establish a MySQL connection
+def get_db_connection():
+    config = get_mysql_config()
+    return mysql.connector.connect(
+        host=config['host'],
+        user=config['user'],
+        password=config['password'],
+        database=config['database']
+    )
+
+@app.route('/quiz', methods=['GET'])
+def get_quiz():
+    data = request.json
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    if not isinstance(data, dict) or 'token' not in data or 'params' not in data:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
+        return jsonify({'error': 'Invalid data types'}), 400
+    
+    cursor.execute("SELECT * FROM quiz", ())
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return jsonify(rows), 200
+
+@app.route('/questions', methods=['GET'])
+def get_questions():
+    data = request.json
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    if not isinstance(data, dict) or 'token' not in data or 'params' not in data:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
+        return jsonify({'error': 'Invalid data types'}), 400
+    
+    cursor.execute("SELECT * FROM question_posts", ())
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return jsonify(rows), 200
+
+@app.route('/question-content', methods=['GET'])
+def get_question_content():
+    data = request.json
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    if not isinstance(data, dict) or 'token' not in data or 'id_question' not in data:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(data['token'], str) or not isinstance(data['id_question'], int):
+        return jsonify({'error': 'Invalid data types'}), 400
+    
+    cursor.execute("SELECT * FROM question_contents WHERE id_question = %s", (data['id_question'],))
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return jsonify(rows), 200
+
+@app.route('/', methods=['POST'])
+def post_data():
+    data = request.json
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    print(data)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'type': 'POST'})
+
+@app.route('/', methods=['DELETE'])
+def delete_data():
+    data = request.json
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    print(data)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'type': 'DELETE'})
+
+if __name__ == '__main__':
+    app.run(debug=True, port=443)
+
