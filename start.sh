@@ -11,6 +11,7 @@ if [ "$(uname)" == "Linux" ]; then
         yes | pip install flask
         yes | pip install flask-mysqldb
         yes | pip install mysql-connector-python
+        yes | pip install flask-cors
         sudo python3 app.py
     elif command -v pacman >/dev/null 2>&1; then
         # Arch Based
@@ -26,6 +27,7 @@ if [ "$(uname)" == "Linux" ]; then
         yes | pip install flask
         yes | pip install flask-mysqldb
         yes | pip install mysql-connector-python
+        yes | pip install flask-cors
         sudo python3 app.py
     else
         echo "OS not supported"

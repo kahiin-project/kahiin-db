@@ -2,6 +2,7 @@ import os
 import mysql.connector
 import configparser
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import mysql.connector
 import configparser
 import os
@@ -122,6 +123,8 @@ except mysql.connector.Error as err:
 
 
 app = Flask(__name__)
+CORS(app)
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles')
 
 # Function to establish a MySQL connection
 def get_db_connection():
@@ -187,18 +190,88 @@ def get_question_content():
     conn.close()
     return jsonify(rows), 200
 
-@app.route('/', methods=['POST'])
-def post_data():
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    print(data)
+@app.route('/quiz', methods=['POST'])
+def post_quiz():
+    token = request.form.get('token')
+    filename = request.form.get('filename')
+    file = request.files.get('file')
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({'type': 'POST'})
+    if not token or not filename or not file:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str) or not isinstance(filename, str):
+        return jsonify({'error': 'Invalid data types'}), 400
+
+    # Save the file
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(file_path)
+
+    # Process the file or save the file path to the database
+    # ...
+
+    return jsonify({'message': 'File uploaded successfully'}), 200
+
+@app.route('/question', methods=['POST'])
+def post_question():
+    data = request.get_json()
+    token = data.get('token')
+    question = data.get('question')
+
+    if not token or not question:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str):
+        return jsonify({'error': 'Invalid data type for token'}), 400
+    if not isinstance(question, dict):
+        return jsonify({'error': 'Invalid data type for question'}), 400
+
+    required_fields = ['subject', 'language', 'title', 'shown_answers', 'correct_answers', 'duration', 'type']
+    for field in required_fields:
+        if field not in question:
+            return jsonify({'error': f'Missing field: {field}'}), 400
+        if field == 'duration' and not isinstance(question[field], int):
+            return jsonify({'error': f'Invalid data type for {field}'}), 400
+        elif field != 'duration' and not isinstance(question[field], str):
+            return jsonify({'error': f'Invalid data type for {field}'}), 400
+
+    # Process the question data or save it to the database
+    # ...
+
+    return jsonify({'message': 'Question received successfully'}), 200
+
+@app.route('/login', methods=['POST'])
+def post_login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(email, str):
+        return jsonify({'error': 'Invalid data type for email'}), 400
+    if not isinstance(password, str):
+        return jsonify({'error': 'Invalid data type for password'}), 400
+
+    # Process the login data or authenticate the user
+    # ...
+
+    return jsonify({'message': 'Login successful'}), 200
+
+@app.route('/signup', methods=['POST'])
+def post_signup():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(email, str):
+        return jsonify({'error': 'Invalid data type for email'}), 400
+    if not isinstance(password, str):
+        return jsonify({'error': 'Invalid data type for password'}), 400
+
+    # Process the signup data or create a new user
+    # ...
+
+    return jsonify({'message': 'Signup successful'}), 200
 
 @app.route('/', methods=['DELETE'])
 def delete_data():
@@ -214,5 +287,5 @@ def delete_data():
     return jsonify({'type': 'DELETE'})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=443)
+    app.run(debug=True)
 
