@@ -208,7 +208,7 @@ def post_quiz():
     # Process the file or save the file path to the database
     # ...
 
-    return jsonify({'message': 'File uploaded successfully'}), 200
+    return jsonify({'message': 'Quiz uploaded successfully'}), 200
 
 @app.route('/question', methods=['POST'])
 def post_question():
@@ -235,7 +235,7 @@ def post_question():
     # Process the question data or save it to the database
     # ...
 
-    return jsonify({'message': 'Question received successfully'}), 200
+    return jsonify({'message': 'Question uploaded successfully'}), 200
 
 @app.route('/login', methods=['POST'])
 def post_login():
@@ -273,18 +273,67 @@ def post_signup():
 
     return jsonify({'message': 'Signup successful'}), 200
 
-@app.route('/', methods=['DELETE'])
-def delete_data():
+@app.route('/account', methods=['DELETE'])
+def delete_account():
     data = request.json
+    token = data.get('token')
+    
+    if not token:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str):
+        return jsonify({'error': 'Invalid data type for token'}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    print(data)
+    # Delete the account
 
     conn.commit()
     cursor.close()
     conn.close()
-    return jsonify({'type': 'DELETE'})
+    return jsonify({'message': 'Account deleted successfully'}), 200
+
+@app.route('/quiz', methods=['DELETE'])
+def delete_quiz():
+    data = request.json
+    token = data.get('token')
+    id_file = data.get('id_file')
+    
+    if not token or not id_file:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str) or not isinstance(id_file, int):
+        return jsonify({'error': 'Invalid data types'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Delete the quiz
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'message': 'Quiz deleted successfully'}), 200
+
+@app.route('/question', methods=['DELETE'])
+def delete_question():
+    data = request.json
+    token = data.get('token')
+    id_question = data.get('id_question')
+    
+    if not token or not id_question:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str) or not isinstance(id_question, int):
+        return jsonify({'error': 'Invalid data types'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Delete the question
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'message': 'Question deleted successfully'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
