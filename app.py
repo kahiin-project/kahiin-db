@@ -61,15 +61,24 @@ try:
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_infos (
-        id_acc INT AUTO_INCREMENT PRIMARY KEY,
+        id_acc INT PRIMARY KEY,
         name VARCHAR(255),
-        academy VARCHAR(255)
+        academy VARCHAR(255),
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
     );
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS connexions (
-        id_acc INT AUTO_INCREMENT PRIMARY KEY,
-        token BINARY(32) NOT NULL
+        id_acc INT PRIMARY KEY,
+        token BINARY(32) NOT NULL,
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS verifications (
+        id_acc INT PRIMARY KEY,
+        token BINARY(32) NOT NULL,
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
     );
     """)
     cursor.execute("""
@@ -78,7 +87,8 @@ try:
         name VARCHAR(255),
         id_acc INT,
         subject VARCHAR(255),
-        language VARCHAR(255)
+        language VARCHAR(255),
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
     );
     """)
     cursor.execute("""
@@ -86,17 +96,19 @@ try:
         id_question INT AUTO_INCREMENT PRIMARY KEY,
         id_acc INT,
         subject VARCHAR(255),
-        language VARCHAR(255)
+        language VARCHAR(255),
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
     );
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS question_contents (
-        id_question INT AUTO_INCREMENT PRIMARY KEY,
+        id_question INT PRIMARY KEY,
         title VARCHAR(255),
         shown_answers TEXT,
         correct_answer TEXT,
         duration INT,
-        type VARCHAR(255)
+        type VARCHAR(255),
+        FOREIGN KEY (id_question) REFERENCES question_posts(id_question)
     );
     """)
 
@@ -111,6 +123,7 @@ try:
     # cursor.execute("DROP TABLE accounts")
     # cursor.execute("DROP TABLE user_infos")
     # cursor.execute("DROP TABLE connexions")
+    # cursor.execute("DROP TABLE verifications")
     # cursor.execute("DROP TABLE quiz")
     # cursor.execute("DROP TABLE question_posts")
     # cursor.execute("DROP TABLE question_contents")
@@ -203,7 +216,8 @@ def get_questions():
 def get_question_content():
     data = request.json
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(dictionary=True)Today at 13:25
+
     
     if not isinstance(data, dict) or 'token' not in data or 'id_question' not in data:
         return jsonify({'error': 'Invalid data structure'}), 400
@@ -292,8 +306,17 @@ def post_login():
     if not isinstance(password_hash, str):
         return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
-    # Process the login data or authenticate the user
-    # ...
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM accounts WHERE email = %s AND password_hash = %s", (email, password_hash))
+    rows = cursor.fetchall()
+    if(len(rows) == 0):
+        return jsonify({'error': 'Invalid email or password'}), 401
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
     return jsonify({'message': 'Login successful'}), 200
 
