@@ -56,7 +56,7 @@ try:
     CREATE TABLE IF NOT EXISTS accounts (
         id_acc INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255),
-        password VARCHAR(64)
+        password_hash VARCHAR(64)
     );
     """)
     cursor.execute("""
@@ -136,6 +136,23 @@ def get_db_connection():
         database=config['database']
     )
 
+def is_hex(s):
+    # Check if the string is a valid hexadecimal string
+    try:
+        bytes.fromhex(s)
+        return True
+    except ValueError:
+        return False
+
+def is_valid_token(token):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM connexions WHERE token = %s", (bytes.fromhex(token),))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return len(rows) > 0
+
 @app.route('/quiz', methods=['GET'])
 def get_quiz():
     data = request.json
@@ -146,6 +163,11 @@ def get_quiz():
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
+    
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
     
     cursor.execute("SELECT * FROM quiz", ())
     rows = cursor.fetchall()
@@ -165,6 +187,11 @@ def get_questions():
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
     
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
+    
     cursor.execute("SELECT * FROM question_posts", ())
     rows = cursor.fetchall()
 
@@ -183,6 +210,11 @@ def get_question_content():
     if not isinstance(data['token'], str) or not isinstance(data['id_question'], int):
         return jsonify({'error': 'Invalid data types'}), 400
     
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
+    
     cursor.execute("SELECT * FROM question_contents WHERE id_question = %s", (data['id_question'],))
     rows = cursor.fetchall()
 
@@ -200,6 +232,11 @@ def post_quiz():
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str) or not isinstance(filename, str):
         return jsonify({'error': 'Invalid data types'}), 400
+    
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
 
     # Save the file
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -231,6 +268,11 @@ def post_question():
             return jsonify({'error': f'Invalid data type for {field}'}), 400
         elif field != 'duration' and not isinstance(question[field], str):
             return jsonify({'error': f'Invalid data type for {field}'}), 400
+    
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
 
     # Process the question data or save it to the database
     # ...
@@ -241,14 +283,14 @@ def post_question():
 def post_login():
     data = request.get_json()
     email = data.get('email')
-    password = data.get('password')
+    password_hash = data.get('password_hash')
 
-    if not email or not password:
+    if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(email, str):
         return jsonify({'error': 'Invalid data type for email'}), 400
-    if not isinstance(password, str):
-        return jsonify({'error': 'Invalid data type for password'}), 400
+    if not isinstance(password_hash, str):
+        return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
     # Process the login data or authenticate the user
     # ...
@@ -259,14 +301,14 @@ def post_login():
 def post_signup():
     data = request.get_json()
     email = data.get('email')
-    password = data.get('password')
+    password_hash = data.get('password_hash')
 
-    if not email or not password:
+    if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(email, str):
         return jsonify({'error': 'Invalid data type for email'}), 400
-    if not isinstance(password, str):
-        return jsonify({'error': 'Invalid data type for password'}), 400
+    if not isinstance(password_hash, str):
+        return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
     # Process the signup data or create a new user
     # ...
@@ -282,6 +324,11 @@ def delete_account():
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str):
         return jsonify({'error': 'Invalid data type for token'}), 400
+
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -304,6 +351,11 @@ def delete_quiz():
     if not isinstance(token, str) or not isinstance(id_file, int):
         return jsonify({'error': 'Invalid data types'}), 400
 
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -324,6 +376,11 @@ def delete_question():
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str) or not isinstance(id_question, int):
         return jsonify({'error': 'Invalid data types'}), 400
+
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
 
     conn = get_db_connection()
     cursor = conn.cursor()
