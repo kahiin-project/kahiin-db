@@ -216,7 +216,7 @@ def get_questions():
 def get_question_content():
     data = request.json
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)Today at 13:25
+    cursor = conn.cursor(dictionary=True)
 
     
     if not isinstance(data, dict) or 'token' not in data or 'id_question' not in data:
