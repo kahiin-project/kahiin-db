@@ -64,21 +64,21 @@ try:
         id_acc INT PRIMARY KEY,
         name VARCHAR(255),
         academy VARCHAR(255),
-        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS connexions (
         id_acc INT PRIMARY KEY,
         token BINARY(32) NOT NULL,
-        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS verifications (
         id_acc INT PRIMARY KEY,
         token BINARY(32) NOT NULL,
-        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
     """)
     cursor.execute("""
@@ -88,7 +88,7 @@ try:
         id_acc INT,
         subject VARCHAR(255),
         language VARCHAR(255),
-        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
     """)
     cursor.execute("""
@@ -97,7 +97,7 @@ try:
         id_acc INT,
         subject VARCHAR(255),
         language VARCHAR(255),
-        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc)
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
     """)
     cursor.execute("""
@@ -108,7 +108,7 @@ try:
         correct_answer TEXT,
         duration INT,
         type VARCHAR(255),
-        FOREIGN KEY (id_question) REFERENCES question_posts(id_question)
+        FOREIGN KEY (id_question) REFERENCES question_posts(id_question) ON DELETE CASCADE
     );
     """)
 
@@ -380,7 +380,7 @@ def delete_account():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Delete the account
+    cursor.execute("DELETE FROM accounts WHERE id_acc = (SELECT id_acc FROM connexions WHERE token = %s)", (bytes.fromhex(token),))
 
     conn.commit()
     cursor.close()
@@ -405,8 +405,12 @@ def delete_quiz():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Delete the quiz
+
+    cursor.execute("SELECT * FROM quiz WHERE id_file = %s", (id_file,))
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        return jsonify({'error': 'Quiz not found'}), 404
+    cursor.execute("DELETE FROM quiz WHERE id_file = %s", (id_file,))
 
     conn.commit()
     cursor.close()
@@ -432,7 +436,11 @@ def delete_question():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Delete the question
+    cursor.execute("SELECT * FROM question_posts WHERE id_question = %s", (id_question,))
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        return jsonify({'error': 'Question not found'}), 404
+    cursor.execute("DELETE FROM question_posts WHERE id_question = %s", (id_question,))
 
     conn.commit()
     cursor.close()
