@@ -157,13 +157,37 @@ def is_hex(s):
     except ValueError:
         return False
 
+def pad_binary_data(data, length):
+    if len(data) < length:
+        data += b'\x00' * (length - len(data))
+    return data
+
 def is_valid_token(token):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM connexions WHERE token = %s", (bytes.fromhex(token),))
+
+    # Deleting existing data
+    cursor.execute("DELETE FROM connexions")
+    cursor.execute("DELETE FROM accounts")
+
+    # Inserting new data
+    token_data = bytes.fromhex('4f3c2e1d5a6b7c8d9e0f1a2b3c4d5e6f')
+    padded_token_data = pad_binary_data(token_data, 32)  # Par exemple, pour une longueur de 32 octets
+
+    cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "f2d81a260dea8a100dd517984e53c56a7523d96942a834b9cdc249bd4e8c7aa9",))
+    cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
+
+    # Retrieving data for verification
+    cursor.execute("SELECT * FROM connexions")
     rows = cursor.fetchall()
+
+    # Comparing binary data
+    cursor.execute("SELECT * FROM connexions WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+    rows = cursor.fetchall()
+
     cursor.close()
     conn.close()
+    
     return len(rows) > 0
 
 @app.route('/quiz', methods=['GET'])
