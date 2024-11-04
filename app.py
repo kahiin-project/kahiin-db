@@ -7,8 +7,27 @@ import mysql.connector
 import configparser
 import os
 
+def pad_binary_data(data, length):
+    if len(data) < length:
+        data += b'\x00' * (length - len(data))
+    return data
+
 # Path to the configuration file
 CONFIG_FILE = 'mysql_config.ini'
+
+app = Flask(__name__)
+CORS(app)
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles')
+
+# Function to establish a MySQL connection
+def get_db_connection():
+    config = get_mysql_config()
+    return mysql.connector.connect(
+        host=config['host'],
+        user=config['user'],
+        password=config['password'],
+        database=config['database']
+    )
 
 # Function to read connection information
 def get_mysql_config():
@@ -48,7 +67,7 @@ config = get_mysql_config()
 
 try:
     # Connect to the MySQL database
-    connection = mysql.connector.connect(**config)
+    connection = get_db_connection()
     cursor = connection.cursor()
 
     # Create tables
@@ -128,44 +147,6 @@ try:
     # cursor.execute("DROP TABLE question_posts")
     # cursor.execute("DROP TABLE question_contents")
 
-    # Close the connection
-    connection.close()
-    print("Successfully connected to the MySQL database")
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
-
-
-app = Flask(__name__)
-CORS(app)
-app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles')
-
-# Function to establish a MySQL connection
-def get_db_connection():
-    config = get_mysql_config()
-    return mysql.connector.connect(
-        host=config['host'],
-        user=config['user'],
-        password=config['password'],
-        database=config['database']
-    )
-
-def is_hex(s):
-    # Check if the string is a valid hexadecimal string
-    try:
-        bytes.fromhex(s)
-        return True
-    except ValueError:
-        return False
-
-def pad_binary_data(data, length):
-    if len(data) < length:
-        data += b'\x00' * (length - len(data))
-    return data
-
-def is_valid_token(token):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     # Deleting existing data
     cursor.execute("DELETE FROM connexions")
     cursor.execute("DELETE FROM accounts")
@@ -176,6 +157,25 @@ def is_valid_token(token):
 
     cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "f2d81a260dea8a100dd517984e53c56a7523d96942a834b9cdc249bd4e8c7aa9",))
     cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
+    cursor.close()
+
+    # Close the connection
+    connection.close()
+    print("Successfully connected to the MySQL database")
+except mysql.connector.Error as err:
+    print(f"Error: {err}")
+
+def is_hex(s):
+    # Check if the string is a valid hexadecimal string
+    try:
+        bytes.fromhex(s)
+        return True
+    except ValueError:
+        return False
+
+def is_valid_token(token):
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     # Retrieving data for verification
     cursor.execute("SELECT * FROM connexions")
@@ -280,8 +280,15 @@ def post_quiz():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
-    # Process the file or save the file path to the database
-    # ...
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Save file data to the database
+    cursor.execute("INSERT INTO quiz (name, id_acc) VALUES (%s, (SELECT id_acc FROM connexions WHERE token = %s))", (filename, bytes.fromhex(token),))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
     return jsonify({'message': 'Quiz uploaded successfully'}), 200
 
