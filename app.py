@@ -6,6 +6,22 @@ from flask_cors import CORS
 import mysql.connector
 import configparser
 import os
+import hashlib
+
+def check_password_hash(stored_hash, password):
+    """
+    Check if the provided password matches the stored hash.
+
+    Args:
+        stored_hash (str): The stored SHA256 hash of the password.
+        password (str): The password to check.
+
+    Returns:
+        bool: True if the password matches the hash, False otherwise.
+    """
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == stored_hash
+
 
 def pad_binary_data(data, length):
     """
@@ -169,7 +185,7 @@ try:
     token_data = bytes.fromhex('4f3c2e1d5a6b7c8d9e0f1a2b3c4d5e6f')
     padded_token_data = pad_binary_data(token_data, 32)  # Par exemple, pour une longueur de 32 octets
 
-    cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "f2d81a260dea8a100dd517984e53c56a7523d96942a834b9cdc249bd4e8c7aa9",))
+    cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",))
     cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
     cursor.execute("INSERT INTO quiz (id_file, name, id_acc, subject, language) VALUES (%s, %s, %s, %s, %s)", (1, "quiz1", 1, "Math", "English"))
     
@@ -241,11 +257,11 @@ def get_quiz():
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
     
-    # if not is_hex(data['token']):
-    #     return jsonify({'error': 'Token not hexadecimal'}), 401
-    # if not is_valid_token(data['token']):
-    #     return jsonify({'error': 'Invalid token'}), 401
-    
+    if not is_hex(data['token']):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(data['token']):
+        return jsonify({'error': 'Invalid token'}), 401
+
     cursor.execute("SELECT * FROM quiz", ())
     rows = cursor.fetchall()
 
@@ -448,28 +464,35 @@ def post_signup():
 @app.route('/account', methods=['DELETE'])
 def delete_account():
     """
-    Deletes a user account based on the provided token.
+    Deletes a user account based on the provided token and password.
 
     Returns:
         Response: A JSON response indicating success or an error message.
     """
     data = request.json
     token = data.get('token')
+    password = data.get('password')
     
-    if not token:
+    if not token or not password:
         return jsonify({'error': 'Invalid data structure'}), 400
-    if not isinstance(token, str):
-        return jsonify({'error': 'Invalid data type for token'}), 400
+    if not isinstance(token, str) or not isinstance(password, str):
+        return jsonify({'error': 'Invalid data type for token or password'}), 400
 
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM accounts WHERE id_acc = (SELECT id_acc FROM connexions WHERE token = %s)", (bytes.fromhex(token),))
+
+    cursor.execute("SELECT password_hash FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    result = cursor.fetchone()
+
+    if not result or not check_password_hash(result[0], password):
+        return jsonify({'error': 'Invalid password'}), 401
+
+    cursor.execute("DELETE FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
 
     conn.commit()
     cursor.close()
