@@ -167,15 +167,6 @@ try:
     cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s", (config['database'],))
     tables = cursor.fetchall()
 
-    # Drop example_table
-    # cursor.execute("DROP TABLE accounts")
-    # cursor.execute("DROP TABLE user_infos")
-    # cursor.execute("DROP TABLE connexions")
-    # cursor.execute("DROP TABLE verifications")
-    # cursor.execute("DROP TABLE quiz")
-    # cursor.execute("DROP TABLE question_posts")
-    # cursor.execute("DROP TABLE question_contents")
-
     # Deleting existing data
     cursor.execute("DELETE FROM connexions")
     cursor.execute("DELETE FROM accounts")
@@ -399,8 +390,15 @@ def post_question():
     if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
-    # Process the question data or save it to the database
-    # ...
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("INSERT INTO question_posts (id_acc, subject, language) VALUES ((SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (bytes.fromhex(token), question['subject'], question['language'],))
+    cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answer, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], question['shown_answers'], question['correct_answers'], question['duration'], question['type'],))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
     return jsonify({'message': 'Question uploaded successfully'}), 200
 
@@ -431,6 +429,10 @@ def post_login():
     if(len(rows) == 0):
         return jsonify({'error': 'Invalid email or password'}), 401
 
+    ###
+    ### Send verification email etc
+    ###
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -456,8 +458,23 @@ def post_signup():
     if not isinstance(password_hash, str):
         return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
-    # Process the signup data or create a new user
-    # ...
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
+    rows = cursor.fetchall()
+    if(len(rows) > 0):
+        return jsonify({'error': 'Email already in use'}), 409
+    
+    cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", (email, password_hash))
+    
+    ###
+    ### Send verification email etc
+    ###
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
     return jsonify({'message': 'Signup successful'}), 200
 
@@ -559,9 +576,9 @@ def delete_question():
     if not isinstance(token, str) or not isinstance(id_question, int):
         return jsonify({'error': 'Invalid data types'}), 400
 
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
     conn = get_db_connection()
@@ -571,6 +588,12 @@ def delete_question():
     rows = cursor.fetchall()
     if len(rows) == 0:
         return jsonify({'error': 'Question not found'}), 404
+
+    cursor.execute("SELECT c.id_acc FROM connexions c JOIN question_posts q ON c.id_acc = q.id_acc WHERE q.id_question = %s AND c.token = %s", (id_question, pad_binary_data(bytes.fromhex(token), 32),))
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        return jsonify({'error': 'Unauthorized to delete question'}), 401
+
     cursor.execute("DELETE FROM question_posts WHERE id_question = %s", (id_question,))
 
     conn.commit()
