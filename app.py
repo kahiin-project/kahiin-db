@@ -8,6 +8,16 @@ import configparser
 import os
 
 def pad_binary_data(data, length):
+    """
+    Pads the binary data to the specified length with null bytes.
+
+    Args:
+        data (bytes): The binary data to pad.
+        length (int): The desired length of the padded data.
+
+    Returns:
+        bytes: The padded binary data.
+    """
     if len(data) < length:
         data += b'\x00' * (length - len(data))
     return data
@@ -21,6 +31,12 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles
 
 # Function to establish a MySQL connection
 def get_db_connection():
+    """
+    Establishes a connection to the MySQL database using the configuration file.
+
+    Returns:
+        mysql.connector.connection.MySQLConnection: The MySQL database connection.
+    """
     config = get_mysql_config()
     return mysql.connector.connect(
         host=config['host'],
@@ -166,7 +182,15 @@ except mysql.connector.Error as err:
     print(f"Error: {err}")
 
 def is_hex(s):
-    # Check if the string is a valid hexadecimal string
+    """
+    Checks if the given string is a valid hexadecimal string.
+
+    Args:
+        s (str): The string to check.
+
+    Returns:
+        bool: True if the string is a valid hexadecimal string, False otherwise.
+    """
     try:
         bytes.fromhex(s)
         return True
@@ -174,6 +198,15 @@ def is_hex(s):
         return False
 
 def is_valid_token(token):
+    """
+    Checks if the given token is valid by querying the database.
+
+    Args:
+        token (str): The token to check.
+
+    Returns:
+        bool: True if the token is valid, False otherwise.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -192,6 +225,12 @@ def is_valid_token(token):
 
 @app.route('/quiz', methods=['GET'])
 def get_quiz():
+    """
+    Retrieves all quizzes from the database.
+
+    Returns:
+        Response: A JSON response containing the quizzes or an error message.
+    """
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -215,6 +254,12 @@ def get_quiz():
 
 @app.route('/questions', methods=['GET'])
 def get_questions():
+    """
+    Retrieves all questions from the database.
+
+    Returns:
+        Response: A JSON response containing the questions or an error message.
+    """
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -238,6 +283,12 @@ def get_questions():
 
 @app.route('/question-content', methods=['GET'])
 def get_question_content():
+    """
+    Retrieves the content of a specific question from the database.
+
+    Returns:
+        Response: A JSON response containing the question content or an error message.
+    """
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -262,6 +313,12 @@ def get_question_content():
 
 @app.route('/quiz', methods=['POST'])
 def post_quiz():
+    """
+    Uploads a new quiz file and saves its information to the database.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     token = request.form.get('token')
     filename = request.form.get('filename')
     file = request.files.get('file')
@@ -294,6 +351,12 @@ def post_quiz():
 
 @app.route('/question', methods=['POST'])
 def post_question():
+    """
+    Uploads a new question and saves its information to the database.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.get_json()
     token = data.get('token')
     question = data.get('question')
@@ -326,6 +389,12 @@ def post_question():
 
 @app.route('/login', methods=['POST'])
 def post_login():
+    """
+    Authenticates a user by checking their email and password hash.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.get_json()
     email = data.get('email')
     password_hash = data.get('password_hash')
@@ -353,6 +422,12 @@ def post_login():
 
 @app.route('/signup', methods=['POST'])
 def post_signup():
+    """
+    Registers a new user by saving their email and password hash to the database.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.get_json()
     email = data.get('email')
     password_hash = data.get('password_hash')
@@ -371,6 +446,12 @@ def post_signup():
 
 @app.route('/account', methods=['DELETE'])
 def delete_account():
+    """
+    Deletes a user account based on the provided token.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.json
     token = data.get('token')
     
@@ -396,6 +477,12 @@ def delete_account():
 
 @app.route('/quiz', methods=['DELETE'])
 def delete_quiz():
+    """
+    Deletes a quiz based on the provided token and quiz ID.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.json
     token = data.get('token')
     id_file = data.get('id_file')
@@ -426,6 +513,12 @@ def delete_quiz():
 
 @app.route('/question', methods=['DELETE'])
 def delete_question():
+    """
+    Deletes a question based on the provided token and question ID.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
     data = request.json
     token = data.get('token')
     id_question = data.get('id_question')
