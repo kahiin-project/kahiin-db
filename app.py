@@ -151,9 +151,6 @@ try:
     cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s", (config['database'],))
     tables = cursor.fetchall()
 
-    # Print the names of all tables
-    print([tables[i][0] for i in range(len(tables))])
-
     # Drop example_table
     # cursor.execute("DROP TABLE accounts")
     # cursor.execute("DROP TABLE user_infos")
@@ -166,6 +163,7 @@ try:
     # Deleting existing data
     cursor.execute("DELETE FROM connexions")
     cursor.execute("DELETE FROM accounts")
+    cursor.execute("DELETE FROM quiz")
 
     # Inserting new data
     token_data = bytes.fromhex('4f3c2e1d5a6b7c8d9e0f1a2b3c4d5e6f')
@@ -173,11 +171,14 @@ try:
 
     cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "f2d81a260dea8a100dd517984e53c56a7523d96942a834b9cdc249bd4e8c7aa9",))
     cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
-    cursor.close()
-
+    cursor.execute("INSERT INTO quiz (id_file, name, id_acc, subject, language) VALUES (%s, %s, %s, %s, %s)", (1, "quiz1", 1, "Math", "English"))
+    
     # Close the connection
+    connection.commit()
+    cursor.close()
     connection.close()
     print("Successfully connected to the MySQL database")
+
 except mysql.connector.Error as err:
     print(f"Error: {err}")
 
@@ -240,10 +241,10 @@ def get_quiz():
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
     
-    if not is_hex(data['token']):
-        return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
-        return jsonify({'error': 'Invalid token'}), 401
+    # if not is_hex(data['token']):
+    #     return jsonify({'error': 'Token not hexadecimal'}), 401
+    # if not is_valid_token(data['token']):
+    #     return jsonify({'error': 'Invalid token'}), 401
     
     cursor.execute("SELECT * FROM quiz", ())
     rows = cursor.fetchall()
@@ -504,6 +505,13 @@ def delete_quiz():
     rows = cursor.fetchall()
     if len(rows) == 0:
         return jsonify({'error': 'Quiz not found'}), 404
+
+    cursor.execute("SELECT c.id_acc FROM connexions c JOIN quiz q ON c.id_acc = q.id_acc WHERE q.id_file = %s AND c.token = %s", (id_file, pad_binary_data(bytes.fromhex(token), 32),))
+    rows = cursor.fetchall()
+    print(rows)
+    if len(rows) == 0:
+        return jsonify({'error': 'Unauthorized to delete quiz'}), 401
+
     cursor.execute("DELETE FROM quiz WHERE id_file = %s", (id_file,))
 
     conn.commit()
@@ -548,5 +556,5 @@ def delete_question():
     return jsonify({'message': 'Question deleted successfully'}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
 
