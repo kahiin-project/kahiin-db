@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Update packages
-sudo apt-get update
+# Update the package list
+sudo dpkg --configure -a
 
 # Install MySQL
 sudo apt-get install -y mysql-server

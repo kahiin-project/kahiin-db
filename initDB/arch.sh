@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Update packages
-sudo pacman -Syu --noconfirm
-
 # Install MySQL
 sudo pacman -S --noconfirm mysql
 

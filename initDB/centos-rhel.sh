@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Update packages
-sudo yum update -y
-
 # Install MySQL
 sudo yum install -y mysql-server
 
