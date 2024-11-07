@@ -8,6 +8,9 @@ import configparser
 import os
 import hashlib
 import secrets
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 def check_password_hash(stored_hash, password):
     """
@@ -40,7 +43,7 @@ def pad_binary_data(data, length):
     return data
 
 # Path to the configuration file
-CONFIG_FILE = 'mysql_config.ini'
+CONFIG_FILE = 'config.ini'
 
 app = Flask(__name__)
 CORS(app)
@@ -432,9 +435,7 @@ def post_login():
     cursor.execute("SELECT token FROM connexions WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
     tokens = cursor.fetchall()
     if len(tokens) == 0:
-        token = secrets.token_bytes(32)
-        cursor.execute("INSERT INTO connexions (id_acc, token) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, token))
-        token = token.hex()
+        return jsonify({'error': 'Not yet connected'}), 401
     else:
         token = tokens[0][0].hex()
 
@@ -443,6 +444,69 @@ def post_login():
     conn.close()
 
     return jsonify({'token': token}), 200
+
+def get_email_config():
+    config = configparser.ConfigParser()
+    if os.path.exists(CONFIG_FILE):
+        config.read(CONFIG_FILE)
+        if 'email' in config:
+            return {
+                'sender': config.get('email', 'sender'),
+                'password': config.get('email', 'password'),
+                'smtp_server': config.get('email', 'smtp_server'),
+                'smtp_port': config.getint('email', 'smtp_port')
+            }
+    
+    # If the section does not exist or the file does not exist, ask the user for input
+    email = input("Email: ")
+    password = input("Email Password: ")
+    smtp_server = input("SMTP Server: ")
+    smtp_port = int(input("SMTP Port: "))
+
+    config.add_section('email')
+    config.set('email', 'sender', email)
+    config.set('email', 'password', password)
+    config.set('email', 'smtp_server', smtp_server)
+    config.set('email', 'smtp_port', str(smtp_port))
+
+    with open(CONFIG_FILE, 'w') as configfile:
+        config.write(configfile)
+
+    return {
+        'sender': email,
+        'password': password,
+        'smtp_server': smtp_server,
+        'smtp_port': smtp_port
+    }
+
+email_config = get_email_config()
+def send_email(subject, message, recipient):
+    sender = email_config['sender']
+    password = email_config['password']
+    smtp_server = email_config['smtp_server']
+    smtp_port = email_config['smtp_port']
+
+    # SMTP server configuration
+    server = smtplib.SMTP(smtp_server, smtp_port)
+    server.starttls()  # Pour activer TLS
+
+    # Login to the server
+    server.login(sender, password)
+
+    # Create the email
+    email = MIMEMultipart()
+    email["From"] = sender
+    email["To"] = recipient
+    email["Subject"] = subject
+
+    # Attach the HTML message body
+    email.attach(MIMEText(message, "html"))
+
+    # Send the email
+    server.send_message(email)
+
+    # Disconnect
+    server.quit()
 
 @app.route('/signup', methods=['POST'])
 def post_signup():
@@ -473,9 +537,79 @@ def post_signup():
     
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", (email, password_hash))
     
-    ###
-    ### Send verification email etc
-    ###
+    html_message = """
+    <html>
+    <head>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                margin: 0;
+                padding: 0;
+            }
+            .container {
+                width: 100%;
+                background-color: #ffffff;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+            .header {
+                background-color: #424242;
+                color: white;
+                text-align: center;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            .content {
+                padding: 20px;
+            }
+            .content h1 {
+                color: #333333;
+            }
+            .content p {
+                color: #666666;
+                line-height: 1.5;
+            }
+            .button {
+                display: inline-block;
+                padding: 10px 20px;
+                margin: 20px 0;
+                background-color: #424242;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+            }
+            .footer {
+                text-align: center;
+                padding: 10px;
+                color: #999999;
+                font-size: 12px;
+            }
+            img {
+                width: 200px;
+                height: 200px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>You're almost member of the kahiin-db!</h1>
+            </div>
+            <div class="content">
+                <img src="https://github.com/kahiin-project/kahiin-db/blob/main/app-icon.png?raw=true" alt="Kahiin Logo">
+                <h1>Thank you for signing up!</h1>
+                <p>We are excited to have you on board. Click the button below to verify your account and get started:</p>
+                <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="button" style="color:white;">Verify Your Account</a>
+            </div>
+            <div class="footer">
+                <p>If you did not sign up for this account, please ignore this email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    send_email("Account Verification", html_message, "tristan.gscn@gmail.com")
 
     conn.commit()
     cursor.close()
@@ -553,7 +687,6 @@ def delete_quiz():
 
     cursor.execute("SELECT c.id_acc FROM connexions c JOIN quiz q ON c.id_acc = q.id_acc WHERE q.id_file = %s AND c.token = %s", (id_file, pad_binary_data(bytes.fromhex(token), 32),))
     rows = cursor.fetchall()
-    print(rows)
     if len(rows) == 0:
         return jsonify({'error': 'Unauthorized to delete quiz'}), 401
 
