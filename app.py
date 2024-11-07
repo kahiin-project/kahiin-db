@@ -7,6 +7,7 @@ import mysql.connector
 import configparser
 import os
 import hashlib
+import secrets
 
 def check_password_hash(stored_hash, password):
     """
@@ -45,22 +46,6 @@ app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles')
 
-# Function to establish a MySQL connection
-def get_db_connection():
-    """
-    Establishes a connection to the MySQL database using the configuration file.
-
-    Returns:
-        mysql.connector.connection.MySQLConnection: The MySQL database connection.
-    """
-    config = get_mysql_config()
-    return mysql.connector.connect(
-        host=config['host'],
-        user=config['user'],
-        password=config['password'],
-        database=config['database']
-    )
-
 # Function to read connection information
 def get_mysql_config():
     config = configparser.ConfigParser()
@@ -93,6 +78,22 @@ def get_mysql_config():
             'password': password,
             'database': database
         }
+
+# Function to establish a MySQL connection
+def get_db_connection():
+    """
+    Establishes a connection to the MySQL database using the configuration file.
+
+    Returns:
+        mysql.connector.connection.MySQLConnection: The MySQL database connection.
+    """
+    config = get_mysql_config()
+    return mysql.connector.connect(
+        host=config['host'],
+        user=config['user'],
+        password=config['password'],
+        database=config['database']
+    )
 
 # Existing code to get MySQL configuration
 config = get_mysql_config()
@@ -177,8 +178,7 @@ try:
     padded_token_data = pad_binary_data(token_data, 32)  # Par exemple, pour une longueur de 32 octets
 
     cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",))
-    cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
-    cursor.execute("INSERT INTO quiz (id_file, name, id_acc, subject, language) VALUES (%s, %s, %s, %s, %s)", (1, "quiz1", 1, "Math", "English"))
+    # cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
     
     # Close the connection
     connection.commit()
@@ -349,7 +349,7 @@ def post_quiz():
     cursor = conn.cursor()
 
     # Save file data to the database
-    cursor.execute("INSERT INTO quiz (name, id_acc) VALUES (%s, (SELECT id_acc FROM connexions WHERE token = %s))", (filename, bytes.fromhex(token),))
+    cursor.execute("INSERT INTO quiz (name, id_acc) VALUES (%s, (SELECT id_acc FROM connexions WHERE token = %s))", (filename, pad_binary_data(bytes.fromhex(token), 32),))
 
     conn.commit()
     cursor.close()
@@ -393,7 +393,7 @@ def post_question():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("INSERT INTO question_posts (id_acc, subject, language) VALUES ((SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (bytes.fromhex(token), question['subject'], question['language'],))
+    cursor.execute("INSERT INTO question_posts (id_acc, subject, language) VALUES ((SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (pad_binary_data(bytes.fromhex(token), 32), question['subject'], question['language'],))
     cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answer, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], question['shown_answers'], question['correct_answers'], question['duration'], question['type'],))
 
     conn.commit()
@@ -426,18 +426,23 @@ def post_login():
     
     cursor.execute("SELECT * FROM accounts WHERE email = %s AND password_hash = %s", (email, password_hash))
     rows = cursor.fetchall()
-    if(len(rows) == 0):
+    if len(rows) == 0:
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    ###
-    ### Send verification email etc
-    ###
+    cursor.execute("SELECT token FROM connexions WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
+    tokens = cursor.fetchall()
+    if len(tokens) == 0:
+        token = secrets.token_bytes(32)
+        cursor.execute("INSERT INTO connexions (id_acc, token) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, token))
+        token = token.hex()
+    else:
+        token = tokens[0][0].hex()
 
     conn.commit()
     cursor.close()
     conn.close()
 
-    return jsonify({'message': 'Login successful'}), 200
+    return jsonify({'token': token}), 200
 
 @app.route('/signup', methods=['POST'])
 def post_signup():
