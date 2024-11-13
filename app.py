@@ -1,7 +1,7 @@
 import os
 import mysql.connector
 import configparser
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import mysql.connector
 import configparser
@@ -167,26 +167,6 @@ try:
     );
     """)
 
-    # Retrieve the names of all tables in the database
-    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s", (config['database'],))
-    tables = cursor.fetchall()
-
-    # Deleting existing data
-    cursor.execute("DELETE FROM connexions")
-    cursor.execute("DELETE FROM accounts")
-    cursor.execute("DELETE FROM quiz")
-
-    # Inserting new data
-    token_data = bytes.fromhex('4f3c2e1d5a6b7c8d9e0f1a2b3c4d5e6f')
-    padded_token_data = pad_binary_data(token_data, 32)  # Par exemple, pour une longueur de 32 octets
-
-    cursor.execute("INSERT INTO accounts (id_acc, email, password_hash) VALUES (%s, %s, %s)", (1, "email@example.org", "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",))
-    # cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (1, padded_token_data))
-    
-    # Close the connection
-    connection.commit()
-    cursor.close()
-    connection.close()
     print("Successfully connected to the MySQL database")
 
 except mysql.connector.Error as err:
@@ -535,81 +515,83 @@ def post_signup():
     if(len(rows) > 0):
         return jsonify({'error': 'Email already in use'}), 409
     
+    print(email, password_hash)
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", (email, password_hash))
-    
-    html_message = """
-    <html>
-    <head>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background-color: #f4f4f4;
-                margin: 0;
-                padding: 0;
-            }
-            .container {
-                width: 100%;
-                background-color: #ffffff;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            }
-            .header {
-                background-color: #424242;
-                color: white;
-                text-align: center;
-                padding-top: 10px;
-                padding-bottom: 10px;
-            }
-            .content {
-                padding: 20px;
-            }
-            .content h1 {
-                color: #333333;
-            }
-            .content p {
-                color: #666666;
-                line-height: 1.5;
-            }
-            .button {
-                display: inline-block;
-                padding: 10px 20px;
-                margin: 20px 0;
-                background-color: #424242;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-            }
-            .footer {
-                text-align: center;
-                padding: 10px;
-                color: #999999;
-                font-size: 12px;
-            }
-            img {
-                width: 200px;
-                height: 200px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>You're almost member of the kahiin-db!</h1>
+    token = secrets.token_bytes(32)
+    cursor.execute("INSERT INTO verifications (id_acc, token) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, token))
+
+    html_message = f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .container {{
+                    width: 100%;
+                    background-color: #ffffff;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }}
+                .header {{
+                    background-color: #424242;
+                    color: white;
+                    text-align: center;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
+                }}
+                .content {{
+                    padding: 20px;
+                }}
+                .content h1 {{
+                    color: #333333;
+                }}
+                .content p {{
+                    color: #666666;
+                    line-height: 1.5;
+                }}
+                .button {{
+                    display: inline-block;
+                    padding: 10px 20px;
+                    margin: 20px 0;
+                    background-color: #424242;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 10px;
+                    color: #999999;
+                    font-size: 12px;
+                }}
+                img {{
+                    width: 200px;
+                    height: 200px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>You're almost member of the kahiin-db!</h1>
+                </div>
+                <div class="content">
+                    <h1>Thank you for signing up!</h1>
+                    <p>We are excited to have you on board. Click the button below to verify your account and get started:</p>
+                    <a href="http://localhost:5000/{token.hex()}" class="button" style="color:white;">Verify Your Account</a>
+                </div>
+                <div class="footer">
+                    <p>If you did not sign up for this account, please ignore this email.</p>
+                </div>
             </div>
-            <div class="content">
-                <img src="https://github.com/kahiin-project/kahiin-db/blob/main/app-icon.png?raw=true" alt="Kahiin Logo">
-                <h1>Thank you for signing up!</h1>
-                <p>We are excited to have you on board. Click the button below to verify your account and get started:</p>
-                <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="button" style="color:white;">Verify Your Account</a>
-            </div>
-            <div class="footer">
-                <p>If you did not sign up for this account, please ignore this email.</p>
-            </div>
-        </div>
-    </body>
-    </html>
+        </body>
+        </html>
     """
 
-    send_email("Account Verification", html_message, "tristan.gscn@gmail.com")
+    send_email("Account Verification", html_message, email)
 
     conn.commit()
     cursor.close()
@@ -738,6 +720,29 @@ def delete_question():
     cursor.close()
     conn.close()
     return jsonify({'message': 'Question deleted successfully'}), 200
+
+@app.route('/<path:token>', methods=['GET'])
+def verification_attempt(token):
+    """
+    Verifies the account based on the provided token.
+    """
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    cursor.execute("DELETE FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+    cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (rows[0][0], pad_binary_data(bytes.fromhex(token), 32),))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return render_template("account_created.html"), 200
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
