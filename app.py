@@ -260,12 +260,25 @@ def get_questions():
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
     
+    required_keys = {"id", "name", "academy", "subject", "language"}
+    if set(data['params'].keys()) != required_keys:
+        return jsonify({'error': 'Invalid params structure'}), 400
+
     if not is_hex(data['token']):
         return jsonify({'error': 'Token not hexadecimal'}), 401
     if not is_valid_token(data['token']):
         return jsonify({'error': 'Invalid token'}), 401
     
-    cursor.execute("SELECT * FROM question_posts", ())
+    # Build the SQL query dynamically based on the provided parameters
+    query = "SELECT * FROM question_posts WHERE 1=1"
+    params = []
+
+    for key, value in data['params'].items():
+        if value is not None:
+            query += f" AND {key} LIKE %s"
+            params.append(f"%{value}%")
+
+    cursor.execute(query, params)
     rows = cursor.fetchall()
 
     cursor.close()
@@ -423,7 +436,7 @@ def post_login():
     cursor.close()
     conn.close()
 
-    return jsonify({'token': token}), 200
+    return jsonify({'message': 'Login successful', 'token': token}), 200
 
 def get_email_config():
     config = configparser.ConfigParser()
@@ -597,7 +610,7 @@ def post_signup():
     cursor.close()
     conn.close()
 
-    return jsonify({'message': 'Signup successful'}), 200
+    return jsonify({'message': 'Email sent successfully'}), 200
 
 @app.route('/account', methods=['DELETE'])
 def delete_account():
