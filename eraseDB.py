@@ -6,7 +6,7 @@ import configparser
 import os
 
 # Path to the configuration file
-CONFIG_FILE = 'mysql_config.ini'
+CONFIG_FILE = 'config.ini'
 
 # Function to read connection information
 def get_mysql_config():
