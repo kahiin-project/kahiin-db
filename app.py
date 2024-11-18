@@ -9,8 +9,10 @@ import os
 import hashlib
 import secrets
 import smtplib
+import shutil
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import xml.etree.ElementTree as ET
 
 def check_password_hash(stored_hash, password):
     """
@@ -336,6 +338,51 @@ def get_question_content():
     conn.close()
     return jsonify(rows), 200
 
+def verify_xml_structure(xml_file):
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        if root.tag != 'questionary':
+            return False
+
+        title = root.find('title')
+        if title is None:
+            return False
+
+        questions_sections = root.findall('questions')
+        if not questions_sections:
+            return False
+
+        for questions in questions_sections:
+            question_list = questions.findall('question')
+            if not question_list:
+                return False
+
+            for question in question_list:
+                if 'type' not in question.attrib or 'duration' not in question.attrib:
+                    return False
+
+                if question.find('title') is None or \
+                   question.find('shown_answers') is None or \
+                   question.find('correct_answers') is None:
+                    return False
+
+        return True
+    except ET.ParseError:
+        return False
+
+def get_quiz_subject_and_language(xml_file):
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        subject = root.find('subject').text
+        language = root.find('language').text
+        return (subject, language)
+    except:
+        return (None, None)
+
 @app.route('/quiz', methods=['POST'])
 def post_quiz():
     """
@@ -367,8 +414,15 @@ def post_quiz():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], str(max_id_file + 1))
     file.save(file_path)
 
+    # Verify the XML structure and get the quiz subject and language
+    with open(file_path, 'r') as f:
+        if not verify_xml_structure(f):
+            return jsonify({'error': 'Invalid XML structure'}), 400
+    with open(file_path, 'r') as f:
+        subject, language = get_quiz_subject_and_language(f)
+
     # Save file data to the database
-    cursor.execute("INSERT INTO quiz (id_file, name, id_acc) VALUES (%s, %s, (SELECT id_acc FROM connexions WHERE token = %s))", (max_id_file + 1, filename, pad_binary_data(bytes.fromhex(token), 32),))
+    cursor.execute("INSERT INTO quiz (id_file, name, id_acc, subject, language) VALUES (%s, %s, (SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (max_id_file + 1, filename, pad_binary_data(bytes.fromhex(token), 32), subject, language))
 
     conn.commit()
     cursor.close()
