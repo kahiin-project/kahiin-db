@@ -217,7 +217,7 @@ def is_valid_token(token):
 @app.route('/quiz', methods=['GET'])
 def get_quiz():
     """
-    Retrieves all quizzes from the database.
+    Retrieves all quizzes from the database based on provided parameters.
 
     Returns:
         Response: A JSON response containing the quizzes or an error message.
@@ -235,8 +235,25 @@ def get_quiz():
         return jsonify({'error': 'Token not hexadecimal'}), 401
     if not is_valid_token(data['token']):
         return jsonify({'error': 'Invalid token'}), 401
+    
+    # Build the SQL query dynamically based on the provided parameters
+    query = """
+    SELECT *
+    FROM quiz
+    WHERE 1=1
+    """
+    params = []
 
-    cursor.execute("SELECT * FROM quiz", ())
+    for key, value in data['params'].items():
+        if value is not None:
+            query += f" AND {key} LIKE %s"
+            params.append(f"%{value}%")
+
+    try:
+        cursor.execute(query, params)
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"{err}"}), 500
+
     rows = cursor.fetchall()
 
     cursor.close()
@@ -260,17 +277,17 @@ def get_questions():
     if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
         return jsonify({'error': 'Invalid data types'}), 400
     
-    required_keys = {"id", "name", "academy", "subject", "language"}
-    if set(data['params'].keys()) != required_keys:
-        return jsonify({'error': 'Invalid params structure'}), 400
-
     if not is_hex(data['token']):
         return jsonify({'error': 'Token not hexadecimal'}), 401
     if not is_valid_token(data['token']):
         return jsonify({'error': 'Invalid token'}), 401
     
     # Build the SQL query dynamically based on the provided parameters
-    query = "SELECT * FROM question_posts WHERE 1=1"
+    query = """
+    SELECT qp.*, qc.title, qc.correct_answer, qc.duration, qc.type
+    FROM question_posts qp
+    JOIN question_contents qc ON qp.id_question = qc.id_question
+    """
     params = []
 
     for key, value in data['params'].items():
@@ -278,7 +295,11 @@ def get_questions():
             query += f" AND {key} LIKE %s"
             params.append(f"%{value}%")
 
-    cursor.execute(query, params)
+    try:
+        cursor.execute(query, params)
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"{err}"}), 500 
+    
     rows = cursor.fetchall()
 
     cursor.close()
