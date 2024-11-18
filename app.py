@@ -358,15 +358,17 @@ def post_quiz():
     if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
-    # Save the file
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Save the file
+    cursor.execute("SELECT MAX(id_file) FROM quiz")
+    max_id_file = cursor.fetchone()[0] or 0
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], str(max_id_file + 1))
+    file.save(file_path)
+
     # Save file data to the database
-    cursor.execute("INSERT INTO quiz (name, id_acc) VALUES (%s, (SELECT id_acc FROM connexions WHERE token = %s))", (filename, pad_binary_data(bytes.fromhex(token), 32),))
+    cursor.execute("INSERT INTO quiz (id_file, name, id_acc) VALUES (%s, %s, (SELECT id_acc FROM connexions WHERE token = %s))", (max_id_file + 1, filename, pad_binary_data(bytes.fromhex(token), 32),))
 
     conn.commit()
     cursor.close()
@@ -707,6 +709,11 @@ def delete_quiz():
         return jsonify({'error': 'Unauthorized to delete quiz'}), 401
 
     cursor.execute("DELETE FROM quiz WHERE id_file = %s", (id_file,))
+
+    # Delete the file from the quizFiles directory
+    file_path = os.path.join('quizFiles', f'{id_file}')
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
     conn.commit()
     cursor.close()
