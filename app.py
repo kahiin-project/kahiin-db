@@ -135,8 +135,16 @@ try:
     CREATE TABLE IF NOT EXISTS verifications (
         id_acc INT PRIMARY KEY,
         token BINARY(32) NOT NULL,
+        type VARCHAR(255) NOT NULL,
         FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
     );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS waiting_passwords (
+        id_acc INT PRIMARY KEY,
+        password_hash VARCHAR(64) NOT NULL,
+        FOREIGN KEY (id_acc) REFERENCES accounts(id_acc) ON DELETE CASCADE
+    );               
     """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS quiz (
@@ -414,12 +422,23 @@ def post_quiz():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], str(max_id_file + 1))
     file.save(file_path)
 
+    conn.commit()
+    cursor.close()
+    conn.close()
+
     # Verify the XML structure and get the quiz subject and language
     with open(file_path, 'r') as f:
         if not verify_xml_structure(f):
             return jsonify({'error': 'Invalid XML structure'}), 400
     with open(file_path, 'r') as f:
         subject, language = get_quiz_subject_and_language(f)
+
+    if subject is None or language is None:
+        os.remove(file_path)
+        return jsonify({'error': 'Missing subject or language'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     # Save file data to the database
     cursor.execute("INSERT INTO quiz (id_file, name, id_acc, subject, language) VALUES (%s, %s, (SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (max_id_file + 1, filename, pad_binary_data(bytes.fromhex(token), 32), subject, language))
@@ -605,10 +624,9 @@ def post_signup():
     if(len(rows) > 0):
         return jsonify({'error': 'Email already in use'}), 409
     
-    print(email, password_hash)
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", (email, password_hash))
     token = secrets.token_bytes(32)
-    cursor.execute("INSERT INTO verifications (id_acc, token) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, token))
+    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'signup'))
 
     html_message = f"""
         <html>
@@ -671,7 +689,7 @@ def post_signup():
                 <div class="content">
                     <h1>Thank you for signing up!</h1>
                     <p>We are excited to have you on board. Click the button below to verify your account and get started:</p>
-                    <a href="http://localhost:5000/{token.hex()}" class="button" style="color:white;">Verify Your Account</a>
+                    <a href="http://localhost:5000/verif?token={token.hex()}" class="button" style="color:white;">Verify Your Account</a>
                 </div>
                 <div class="footer">
                     <p>If you did not sign up for this account, please ignore this email.</p>
@@ -682,6 +700,122 @@ def post_signup():
     """
 
     send_email("Account Verification", html_message, email)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'message': 'Email sent successfully'}), 200
+
+@app.route('/reset-password', methods=['POST'])
+def post_reset_password():
+    """
+    Sends a password reset email to the user based on their email.
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
+    data = request.get_json()
+    token = data.get('token')
+
+    if not token:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT email FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    email = cursor.fetchone()[0]
+
+    if not email:
+        return jsonify({'error': 'Email not found'}), 404
+    
+    new_password_hash = data.get('new_password_hash')
+    if not new_password_hash:
+        return jsonify({'error': 'New password hash is required'}), 400
+    if not isinstance(new_password_hash, str):
+        return jsonify({'error': 'Invalid data type for new_password_hash'}), 400
+    
+    token = secrets.token_bytes(32)
+    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'reset_password'))
+    cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, new_password_hash))
+
+    html_message = f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .container {{
+                    width: 100%;
+                    background-color: #ffffff;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }}
+                .header {{
+                    background-color: #424242;
+                    color: white;
+                    text-align: center;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
+                }}
+                .content {{
+                    padding: 20px;
+                }}
+                .content h1 {{
+                    color: #333333;
+                }}
+                .content p {{
+                    color: #666666;
+                    line-height: 1.5;
+                }}
+                .button {{
+                    display: inline-block;
+                    padding: 10px 20px;
+                    margin: 20px 0;
+                    background-color: #424242;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 10px;
+                    color: #999999;
+                    font-size: 12px;
+                }}
+                img {{
+                    width: 200px;
+                    height: 200px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Reset Your Password</h1>
+                </div>
+                <div class="content">
+                    <h1>Forgot your password?</h1>
+                    <p>Click the button below to reset your password:</p>
+                    <a href="http://localhost:5000/verif?token={token.hex()}" class="button" style="color:white;">Reset Password</a>
+                </div>
+                <div class="footer">
+                    <p>If you did not request a password reset, please ignore this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    """
+
+    send_email("Password Reset", html_message, email)
 
     conn.commit()
     cursor.close()
@@ -816,28 +950,47 @@ def delete_question():
     conn.close()
     return jsonify({'message': 'Question deleted successfully'}), 200
 
-@app.route('/<path:token>', methods=['GET'])
-def verification_attempt(token):
+from flask import request
+
+@app.route('/verif', methods=['GET'])
+def verification_attempt():
     """
     Verifies the account based on the provided token.
     """
-
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'error': 'Token is required'}), 400
+    
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+    cursor.execute("SELECT * FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32), ))
     rows = cursor.fetchall()
     if len(rows) == 0:
         return jsonify({'error': 'Invalid token'}), 401
     
-    cursor.execute("DELETE FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
-    cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (rows[0][0], pad_binary_data(bytes.fromhex(token), 32),))
+    type = rows[0][2]
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return render_template("account_created.html"), 200
+    match(type):
+        case 'signup':
+            cursor.execute("DELETE FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+            cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)", (rows[0][0], pad_binary_data(bytes.fromhex(token), 32),))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return render_template("account_created.html"), 200
+        case 'reset_password':
+            cursor.execute("DELETE FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
+            cursor.execute("SELECT password_hash FROM waiting_passwords WHERE id_acc = %s", (rows[0][0],))
+            new_password_hash = cursor.fetchone()[0]
+            cursor.execute("UPDATE accounts SET password_hash = %s WHERE id_acc = %s", (new_password_hash, rows[0][0]))
+            cursor.execute("DELETE FROM waiting_passwords WHERE id_acc = %s", (rows[0][0],))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return render_template("password_reset.html"), 200
+        case _:
+            return jsonify({'error': 'Invalid type'}), 400
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
