@@ -1,7 +1,7 @@
 import os
 import mysql.connector
 import configparser
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import mysql.connector
 import configparser
@@ -13,6 +13,7 @@ import shutil
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
+import json
 
 def check_password_hash(stored_hash, password):
     """
@@ -597,6 +598,14 @@ def send_email(subject, message, recipient):
     # Disconnect
     server.quit()
 
+def is_authorized_email(email):
+    with open('authorized_emails.json', 'r') as f:
+        authorized_emails = json.load(f)
+    for e in authorized_emails:
+        if e in email:
+            return True
+    return False
+
 @app.route('/signup', methods=['POST'])
 def post_signup():
     """
@@ -611,8 +620,12 @@ def post_signup():
 
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
+    
     if not isinstance(email, str):
         return jsonify({'error': 'Invalid data type for email'}), 400
+    if not is_authorized_email(email):
+        return jsonify({'error': 'Unauthorized email'}), 401
+    
     if not isinstance(password_hash, str):
         return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
@@ -950,8 +963,6 @@ def delete_question():
     conn.close()
     return jsonify({'message': 'Question deleted successfully'}), 200
 
-from flask import request
-
 @app.route('/verif', methods=['GET'])
 def verification_attempt():
     """
@@ -985,12 +996,43 @@ def verification_attempt():
             new_password_hash = cursor.fetchone()[0]
             cursor.execute("UPDATE accounts SET password_hash = %s WHERE id_acc = %s", (new_password_hash, rows[0][0]))
             cursor.execute("DELETE FROM waiting_passwords WHERE id_acc = %s", (rows[0][0],))
+            cursor.execute("UPDATE connexions SET token = %s WHERE id_acc = %s", (pad_binary_data(secrets.token_bytes(32), 32), rows[0][0]))
             conn.commit()
             cursor.close()
             conn.close()
             return render_template("password_reset.html"), 200
         case _:
             return jsonify({'error': 'Invalid type'}), 400
+
+@app.route('/download', methods=['GET'])
+def download():
+    """
+    Downloads a quiz file based on the provided quiz ID and token.
+
+    Returns:
+        Response: A file download response or an error message.
+    """
+    token = request.args.get('token')
+    id_file = request.args.get('id_file')
+    if not token or not id_file:
+        return jsonify({'error': 'Token and Quiz ID are required'}), 400
+
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name FROM quiz WHERE id_file = %s", (id_file,))
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        return jsonify({'error': 'Quiz not found'}), 404
+
+    cursor.close()
+    conn.close()
+    return send_file(f'quizFiles/{id_file}', as_attachment=True)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
