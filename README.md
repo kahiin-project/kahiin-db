@@ -57,6 +57,9 @@ The `start` script performs the following actions:
 - Sets up the necessary environment variables.
 - Starts the application server.
 - Ensures that all required services are running.
+- Prompts the user to provide MySQL and email configuration details, which are then automatically saved in the config.ini file.
+
+💡 The application uses an email verification system to confirm user registrations. When a new user registers, a verification email is sent to the provided email address (same for reseting password).
 
 Once the application is running, you can access it at `http://localhost:5000` (or the configured port).
 
@@ -176,7 +179,7 @@ Kahiin-DB provides a RESTful API for programmatic access. Here are some example 
     - **filename**: The name of the quiz file.
     - **file**: The path to the quiz file.
 
-    > 💡 Upload a new quiz can be done with an HTML form ! Here's a simple example :
+    💡 Upload a new quiz can be done with an HTML form ! Here's a simple example :
     ```HTML
     <!DOCTYPE html>
     <html lang="en">
@@ -264,6 +267,34 @@ Kahiin-DB provides a RESTful API for programmatic access. Here are some example 
     ```
     - **token**: Your authentication token.
     - **id_file**: The ID of the quiz file.
+
+
+
+### Erase the Database
+
+If you need to erase the database for any reason, you can use the `eraseDB` Python script. This script will delete and recreate all SQL tables.
+```sh
+python3 eraseDB.py
+```
+💡 Your IDs will not be erased.
+
+### Removing MySQL
+
+To remove MySQL from your system, you can use the scripts located in the `dropDB` folder. Here are the commands to execute based on your Linux distribution:
+```sh
+# Ubuntu/Debian
+./dropDB/ubuntu-debian.sh
+
+# CentOS/RHEL
+./dropDB/centos-rhel.sh
+
+# Arch Linux
+./dropDB/arch.sh
+```
+
+These scripts will stop the MySQL service, remove the MySQL packages, and delete the associated configuration files.
+
+❗ Run these scripts will not answer any ID and will directly execute everything.
 
 ### Troubleshooting
 
