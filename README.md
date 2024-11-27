@@ -8,6 +8,10 @@ Kahiin-DB is a free marketplace for stocking [Kahiin](https://github.com/kahiin-
 - **Diverse Questions**: A wide variety of questions across different subjects and levels.
 - **Community Driven**: Built and maintained by a community of educators.
 
+## Relational Database Schema
+
+![Relational DB Schema](assets/relational-schema.svg)
+
 ## Getting Started
 
 ### Supported Operating Systems
