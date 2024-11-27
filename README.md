@@ -122,46 +122,29 @@ Kahiin-DB provides a RESTful API for programmatic access. Here are some example 
 
 5. **Search Quizzes**:
     ```sh
-    curl -X GET http://localhost:5000/quiz \
-    -H "Content-Type: application/json" \
-    -d '{
-        "token": "your_token",
-        "params": {
-            "subject": "Math",
-            "language": "English"
-        }
-    }'
+    curl -G -d "token=your_token" \
+    -d "param1=value1" \
+    -d "param2=value2" \
+    http://localhost:5000/quiz
     ```
     - **token**: Your authentication token.
-    - **params**: Filters for the quizzes.
-        - **subject**: The subject of the quizzes.
-        - **language**: The language of the quizzes.
+    - **params**: Add as much parameters as you want.
 
 6. **Search Questions**:
     ```sh
-    curl -X GET http://localhost:5000/questions \
-    -H "Content-Type: application/json" \
-    -d '{
-        "token": "your_token",
-        "params": {
-            "subject": "Math",
-            "language": "English"
-        }
-    }'
+    curl -G -d "token=your_token" \
+    -d "param1=value1" \
+    -d "param2=value2" \
+    http://localhost:5000/questions
     ```
     - **token**: Your authentication token.
-    - **params**: Filters for the questions.
-        - **subject**: The subject of the questions.
-        - **language**: The language of the questions.
+    - **params**: Add as much parameters as you want.
 
 7. **Get Specific Question Content**
     ```sh
-    curl -X GET http://localhost:5000/question-content \
-    -H "Content-Type: application/json" \
-    -d '{
-        "token": "your_token",
-        "id_question": 1
-    }'
+    curl -G -d "token=your_token" \
+    -d "id_question=1" \
+    http://localhost:5000/question-content
     ```
     - **token**: Your authentication token.
     - **id_question**: The ID of the question.

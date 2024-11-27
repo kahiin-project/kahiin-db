@@ -233,19 +233,23 @@ def get_quiz():
     Returns:
         Response: A JSON response containing the quizzes or an error message.
     """
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    if not isinstance(data, dict) or 'token' not in data or 'params' not in data:
+    token = request.args.get('token')
+    params = request.args.to_dict(flat=False)
+    print("token: ", token)
+    params.pop('token', None)
+
+    if not token:
         return jsonify({'error': 'Invalid data structure'}), 400
-    if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
+    if not isinstance(token, str):
         return jsonify({'error': 'Invalid data types'}), 400
     
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     
     # Build the SQL query dynamically based on the provided parameters
     query = """
@@ -253,15 +257,15 @@ def get_quiz():
     FROM quiz
     WHERE 1=1
     """
-    params = []
+    query_params = []
 
-    for key, value in data['params'].items():
-        if value is not None:
+    for key, value in params.items():
+        if value:
             query += f" AND {key} LIKE %s"
-            params.append(f"%{value}%")
+            query_params.append(f"%{value[0]}%")
 
     try:
-        cursor.execute(query, params)
+        cursor.execute(query, query_params)
     except mysql.connector.Error as err:
         return jsonify({'error': f"{err}"}), 500
 
@@ -279,19 +283,22 @@ def get_questions():
     Returns:
         Response: A JSON response containing the questions or an error message.
     """
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    if not isinstance(data, dict) or 'token' not in data or 'params' not in data:
+    token = request.args.get('token')
+    params = request.args.to_dict(flat=False)
+    params.pop('token', None)
+
+    if not token:
         return jsonify({'error': 'Invalid data structure'}), 400
-    if not isinstance(data['token'], str) or not isinstance(data['params'], dict):
+    if not isinstance(token, str):
         return jsonify({'error': 'Invalid data types'}), 400
     
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     
     # Build the SQL query dynamically based on the provided parameters
     query = """
@@ -299,15 +306,15 @@ def get_questions():
     FROM question_posts qp
     JOIN question_contents qc ON qp.id_question = qc.id_question
     """
-    params = []
+    query_params = []
 
-    for key, value in data['params'].items():
-        if value is not None:
+    for key, value in params.items():
+        if value:
             query += f" AND {key} LIKE %s"
-            params.append(f"%{value}%")
+            query_params.append(f"%{value[0]}%")
 
     try:
-        cursor.execute(query, params)
+        cursor.execute(query, query_params)
     except mysql.connector.Error as err:
         return jsonify({'error': f"{err}"}), 500 
     
@@ -325,22 +332,23 @@ def get_question_content():
     Returns:
         Response: A JSON response containing the question content or an error message.
     """
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    token = request.args.get('token')
+    id_question = request.args.get('id_question')
 
-    
-    if not isinstance(data, dict) or 'token' not in data or 'id_question' not in data:
+    if not token:
         return jsonify({'error': 'Invalid data structure'}), 400
-    if not isinstance(data['token'], str) or not isinstance(data['id_question'], int):
+    if not isinstance(token, str) or not id_question.isdigit():
         return jsonify({'error': 'Invalid data types'}), 400
     
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
     
-    cursor.execute("SELECT * FROM question_contents WHERE id_question = %s", (data['id_question'],))
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT * FROM question_contents WHERE id_question = %s", (id_question,))
     rows = cursor.fetchall()
 
     cursor.close()
@@ -755,7 +763,13 @@ def post_reset_password():
     
     token = secrets.token_bytes(32)
     cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'reset_password'))
-    cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, new_password_hash))
+    # Check if an entry already exists in waiting_passwords
+    cursor.execute("SELECT id_acc FROM waiting_passwords WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
+    existing_entry = cursor.fetchone()
+    if existing_entry:
+        cursor.execute("UPDATE waiting_passwords SET password_hash = %s WHERE id_acc = %s", (new_password_hash, existing_entry[0]))
+    else:
+        cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, new_password_hash))
 
     html_message = f"""
         <html>
