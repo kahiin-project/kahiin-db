@@ -317,6 +317,8 @@ def get_questions():
         cursor.execute(query, query_params)
     except mysql.connector.Error as err:
         return jsonify({'error': f"{err}"}), 500 
+    except:
+        raise RuntimeError("Curious error")
     
     rows = cursor.fetchall()
 
@@ -355,7 +357,7 @@ def get_question_content():
     conn.close()
     return jsonify(rows), 200
 
-def verify_xml_structure(xml_file):
+def verify_xml_structure(xml_file) -> bool:
     try:
         tree = ET.parse(xml_file)
         root = tree.getroot()
@@ -714,7 +716,7 @@ def post_signup():
                 </div>
                 <div class="footer">
                     <p>If you did not sign up for this account, please ignore this email.</p>
-                </div>
+                </div>{token.hex()}
             </div>
         </body>
         </html>
