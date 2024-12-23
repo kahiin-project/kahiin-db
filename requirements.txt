@@ -1,0 +1,5 @@
+flask
+flask-mysqldb
+mysql-connector-python
+flask-cors
+cryptography
