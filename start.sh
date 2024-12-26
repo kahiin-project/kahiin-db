@@ -1,5 +1,5 @@
 #!/bin/bash
-
+read -s -p "Enter password: " password
 if [ "$(uname)" == "Linux" ]; then
     if command -v apt-get >/dev/null 2>&1; then
         # Debian/Ubuntu Based
@@ -8,11 +8,8 @@ if [ "$(uname)" == "Linux" ]; then
         yes | sudo apt-get install libmysqlclient-dev  # Ajout de cette ligne
         python3 -m venv venv
         source venv/bin/activate
-        yes | pip install flask
-        yes | pip install flask-mysqldb
-        yes | pip install mysql-connector-python
-        yes | pip install flask-cors
-        sudo python3 app.py
+        yes | pip install -r requirements.txt
+        python3 app.py $password
     elif command -v pacman >/dev/null 2>&1; then
         # Arch Based
         echo
@@ -24,11 +21,8 @@ if [ "$(uname)" == "Linux" ]; then
         yes | sudo pacman -S mariadb-libs  # Ajout de cette ligne
         python3 -m venv venv
         source venv/bin/activate
-        yes | pip install flask
-        yes | pip install flask-mysqldb
-        yes | pip install mysql-connector-python
-        yes | pip install flask-cors
-        sudo python3 app.py
+        yes | pip install -r requirements.txt
+        python3 app.py $password
     else
         echo "OS not supported"
     fi

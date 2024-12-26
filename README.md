@@ -50,7 +50,7 @@ Kahiin-DB is a free marketplace for stocking [Kahiin](https://github.com/kahiin-
 
     During the execution of the script, you will be prompted to provide a database name, a username, and a password.
 
-### Running the Application
+## Running the Application
 
 Start the application with the following command:
 ```sh

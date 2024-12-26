@@ -9,25 +9,32 @@ import os
 import hashlib
 import secrets
 import smtplib
-import shutil
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 import json
+import sys
+from cryptography.fernet import Fernet
+import uuid
 
-def check_password_hash(stored_hash, password):
+password = sys.argv[1]
+salt = ""
+
+# Modifier la fonction de vérification du hash
+def check_password_hash(stored_hash, password_hash):
     """
-    Check if the provided password matches the stored hash.
+    Check if the provided password hash matches the stored hash with salt.
 
     Args:
-        stored_hash (str): The stored SHA256 hash of the password.
-        password (str): The password to check.
+        stored_hash (str): The stored salted hash in the database
+        password_hash (str): The SHA256 hash from client side
 
     Returns:
-        bool: True if the password matches the hash, False otherwise.
+        bool: True if the password matches, False otherwise
     """
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    return password_hash == stored_hash
+    # Add server-side salt and hash again
+    salted_hash = hashlib.sha256((password_hash + salt).encode()).hexdigest()
+    return salted_hash == stored_hash
 
 
 def pad_binary_data(data, length):
@@ -574,6 +581,7 @@ def post_question():
 
     return jsonify({'message': 'Question uploaded successfully'}), 200
 
+
 @app.route('/login', methods=['POST'])
 def post_login():
     """
@@ -584,35 +592,21 @@ def post_login():
     """
     data = request.get_json()
     email = data.get('email')
-    password_hash = data.get('password_hash')
+    password_hash = data.get('password_hash') # Hash from client
 
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
-    if not isinstance(email, str):
-        return jsonify({'error': 'Invalid data type for email'}), 400
-    if not isinstance(password_hash, str):
-        return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM accounts WHERE email = %s AND password_hash = %s", (email, password_hash))
-    rows = cursor.fetchall()
-    if len(rows) == 0:
+    # Compare with salted hash stored in DB
+    cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
+    account = cursor.fetchone()
+    if not account or not check_password_hash(account[2], password_hash):
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    cursor.execute("SELECT token FROM connexions WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
-    tokens = cursor.fetchall()
-    if len(tokens) == 0:
-        return jsonify({'error': 'Not yet connected'}), 401
-    else:
-        token = tokens[0][0].hex()
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return jsonify({'message': 'Login successful', 'token': token}), 200
+    # Rest of login logic...
 
 def get_email_config():
     config = configparser.ConfigParser()
@@ -695,7 +689,7 @@ def post_signup():
     """
     data = request.get_json()
     email = data.get('email')
-    password_hash = data.get('password_hash')
+    password_hash = data.get('password_hash') # Hash from client
 
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
@@ -716,7 +710,11 @@ def post_signup():
     if(len(rows) > 0):
         return jsonify({'error': 'Email already in use'}), 409
     
-    cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", (email, password_hash))
+    # Add salt and hash again for storage
+    salted_hash = hashlib.sha256((password_hash + salt).encode()).hexdigest()
+    
+    cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", 
+                  (email, salted_hash))
     token = secrets.token_bytes(32)
     cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'signup'))
 
@@ -826,7 +824,9 @@ def post_reset_password():
     if not email:
         return jsonify({'error': 'Email not found'}), 404
     
-    new_password_hash = data.get('new_password_hash')
+    new_password_hash = data.get('new_password_hash') # Hash from client
+    salted_hash = hashlib.sha256((new_password_hash + salt).encode()).hexdigest()
+
     if not new_password_hash:
         return jsonify({'error': 'New password hash is required'}), 400
     if not isinstance(new_password_hash, str):
@@ -837,10 +837,11 @@ def post_reset_password():
     # Check if an entry already exists in waiting_passwords
     cursor.execute("SELECT id_acc FROM waiting_passwords WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
     existing_entry = cursor.fetchone()
+    salted_hash = hashlib.sha256((new_password_hash + salt).encode()).hexdigest()
     if existing_entry:
-        cursor.execute("UPDATE waiting_passwords SET password_hash = %s WHERE id_acc = %s", (new_password_hash, existing_entry[0]))
+        cursor.execute("UPDATE waiting_passwords SET password_hash = %s WHERE id_acc = %s", (salted_hash, existing_entry[0]))
     else:
-        cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, new_password_hash))
+        cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, salted_hash))
 
     html_message = f"""
         <html>
@@ -921,7 +922,8 @@ def post_reset_password():
 
     return jsonify({'message': 'Email sent successfully'}), 200
 
-@app.route('/account', methods=['DELETE'])
+# Modifier la route delete account  
+@app.route('/account', methods=['DELETE']) 
 def delete_account():
     """
     Deletes a user account based on the provided token and password.
@@ -931,9 +933,9 @@ def delete_account():
     """
     data = request.json
     token = data.get('token')
-    password = data.get('password')
+    password_hash = data.get('password') # Hash from client
     
-    if not token or not password:
+    if not token or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str) or not isinstance(password, str):
         return jsonify({'error': 'Invalid data type for token or password'}), 400
@@ -946,10 +948,11 @@ def delete_account():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT password_hash FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
-    result = cursor.fetchone()
+    cursor.execute("SELECT password_hash FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", 
+                  (pad_binary_data(bytes.fromhex(token), 32),))
+    stored_hash = cursor.fetchone()[0]
 
-    if not result or not check_password_hash(result[0], password):
+    if not check_password_hash(stored_hash, password_hash):
         return jsonify({'error': 'Invalid password'}), 401
 
     cursor.execute("DELETE FROM accounts WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
@@ -1120,5 +1123,26 @@ def download():
     return send_file(f'quizFiles/{id_file}', as_attachment=True)
 
 if __name__ == '__main__':
+    if not password:
+        print("No password provided")
+        sys.exit(1)
+    if not os.path.exists('.passwordcheck'):
+        key = Fernet.generate_key()
+        with open('.passwordcheck', 'w') as f:
+            f.write(key.decode())
+        fernet = Fernet(key)
+        encrypted = fernet.encrypt((password + str(uuid.getnode())).encode())
+        with open('.passwordcheck', 'w') as f:
+            f.write(encrypted.decode())
+    with open('.passwordcheck', 'r') as f:
+        key = f.read()
+        fernet = Fernet(key)
+        decrypted = fernet.decrypt(password.encode())
+        if not decrypted == (password + str(uuid.getnode())).encode():
+            print("Invalid password")
+            sys.exit(1)
+        else:
+            salt = hashlib.sha256(password.encode()).hexdigest()
+        
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
 
