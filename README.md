@@ -153,6 +153,13 @@ Kahiin-DB provides a RESTful API for programmatic access. Here are some example 
     - **token**: Your authentication token.
     - **id_question**: The ID of the question.
 
+8. **Get all posts by the user based on the provided token**
+    ```sh
+    curl -G -d "token=YOUR_TOKEN_HERE" \
+    http://localhost:5000/myposts
+    ```
+    - **token**: Your authentication token.
+
 ---
 
 8. **Upload a New Quiz**

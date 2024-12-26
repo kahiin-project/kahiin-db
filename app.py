@@ -45,6 +45,23 @@ def pad_binary_data(data, length):
         data += b'\x00' * (length - len(data))
     return data
 
+def parse_answers(answers):
+    """
+    Parses the answers if they are in string format.
+
+    Args:
+        answers (str or list): The answers to parse.
+
+    Returns:
+        list: The parsed answers.
+    """
+    if isinstance(answers, str):
+        try:
+            return json.loads(answers)
+        except json.JSONDecodeError:
+            return []
+    return answers
+
 # Path to the configuration file
 CONFIG_FILE = 'config.ini'
 
@@ -271,6 +288,10 @@ def get_quiz():
 
     rows = cursor.fetchall()
 
+    for row in rows:
+        row['shown_answers'] = parse_answers(row['shown_answers'])
+        row['correct_answer'] = parse_answers(row['correct_answer'])
+
     cursor.close()
     conn.close()
     return jsonify(rows), 200
@@ -322,6 +343,10 @@ def get_questions():
     
     rows = cursor.fetchall()
 
+    for row in rows:
+        row['shown_answers'] = parse_answers(row['shown_answers'])
+        row['correct_answer'] = parse_answers(row['correct_answer'])
+
     cursor.close()
     conn.close()
     return jsonify(rows), 200
@@ -353,9 +378,49 @@ def get_question_content():
     cursor.execute("SELECT * FROM question_contents WHERE id_question = %s", (id_question,))
     rows = cursor.fetchall()
 
+    for row in rows:
+        row['shown_answers'] = parse_answers(row['shown_answers'])
+        row['correct_answer'] = parse_answers(row['correct_answer'])
+
     cursor.close()
     conn.close()
     return jsonify(rows), 200
+
+@app.route('/myposts', methods=['GET'])
+def get_myposts():
+    """
+    Retrieves all posts by the user based on the provided token.
+
+    Returns:
+        Response: A JSON response containing the posts or an error message.
+    """
+    token = request.args.get('token')
+
+    if not token:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not isinstance(token, str):
+        return jsonify({'error': 'Invalid data type for token'}), 400
+    
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT qp.*, qc.* FROM question_posts qp JOIN question_contents qc ON qp.id_question = qc.id_question WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    questions = cursor.fetchall()
+    cursor.execute("SELECT * FROM quiz WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    quizzes = cursor.fetchall()
+
+    for question in questions:
+        question['shown_answers'] = parse_answers(question['shown_answers'])
+        question['correct_answer'] = parse_answers(question['correct_answer'])
+
+    cursor.close()
+    conn.close()
+    return jsonify({'questions': questions, 'quizzes': quizzes}), 200
 
 def verify_xml_structure(xml_file) -> bool:
     try:
@@ -487,17 +552,21 @@ def post_question():
             return jsonify({'error': f'Invalid data type for {field}'}), 400
         elif field != 'duration' and not isinstance(question[field], str):
             return jsonify({'error': f'Invalid data type for {field}'}), 400
-    
+
     if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
     if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
+    # Convert shown_answers and correct_answers from strings to lists
+    shown_answers = parse_answers(question['shown_answers'])
+    correct_answers = parse_answers(question['correct_answers'])
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("INSERT INTO question_posts (id_acc, subject, language) VALUES ((SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (pad_binary_data(bytes.fromhex(token), 32), question['subject'], question['language'],))
-    cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answer, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], question['shown_answers'], question['correct_answers'], question['duration'], question['type'],))
+    cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answer, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], json.dumps(shown_answers), json.dumps(correct_answers), question['duration'], question['type'],))
 
     conn.commit()
     cursor.close()
