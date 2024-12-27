@@ -50,7 +50,7 @@ Kahiin-DB is a free marketplace for stocking [Kahiin](https://github.com/kahiin-
 
     During the execution of the script, you will be prompted to provide a database name, a username, and a password.
 
-### Running the Application
+## Running the Application
 
 Start the application with the following command:
 ```sh
@@ -152,6 +152,13 @@ Kahiin-DB provides a RESTful API for programmatic access. Here are some example 
     ```
     - **token**: Your authentication token.
     - **id_question**: The ID of the question.
+
+8. **Get all posts by the user based on the provided token**
+    ```sh
+    curl -G -d "token=YOUR_TOKEN_HERE" \
+    http://localhost:5000/myposts
+    ```
+    - **token**: Your authentication token.
 
 ---
 
