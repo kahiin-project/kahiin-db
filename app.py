@@ -5,7 +5,6 @@ from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import mysql.connector
 import configparser
-import os
 import hashlib
 import secrets
 import smtplib
@@ -13,9 +12,13 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 import json
-import sys
-from cryptography.fernet import Fernet
 import uuid
+import base64
+import sys
+import uuid
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 password = sys.argv[1]
 salt = ""
@@ -1054,26 +1057,32 @@ def download():
     return send_file(f'quizFiles/{id_file}', as_attachment=True)
 
 if __name__ == '__main__':
+    kbf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b'',
+        iterations=400000,
+    )
+    key = base64.urlsafe_b64encode(kbf.derive(password.encode()))
     if not password:
         print("No password provided")
         sys.exit(1)
     if not os.path.exists('.passwordcheck'):
-        key = Fernet.generate_key()
-        with open('.passwordcheck', 'w') as f:
-            f.write(key.decode())
         fernet = Fernet(key)
         encrypted = fernet.encrypt((password + str(uuid.getnode())).encode())
         with open('.passwordcheck', 'w') as f:
             f.write(encrypted.decode())
+        with open('.passwordcheck', 'w') as f:
+            f.write(encrypted.decode())
     with open('.passwordcheck', 'r') as f:
-        key = f.read()
         fernet = Fernet(key)
-        decrypted = fernet.decrypt(password.encode())
-        if not decrypted == (password + str(uuid.getnode())).encode():
+        try:
+            decrypted = fernet.decrypt(f.read().encode())
+        except:
             print("Invalid password")
             sys.exit(1)
-        else:
-            salt = hashlib.sha256(password.encode()).hexdigest()
-        
+        salt = hashlib.sha256(password.encode()).hexdigest()
+    
+    print("Password is correct", salt)
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
 
