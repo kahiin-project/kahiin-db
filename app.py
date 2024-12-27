@@ -198,7 +198,7 @@ try:
         id_question INT PRIMARY KEY,
         title VARCHAR(255),
         shown_answers TEXT,
-        correct_answer TEXT,
+        correct_answers TEXT,
         duration INT,
         type VARCHAR(255),
         FOREIGN KEY (id_question) REFERENCES question_posts(id_question) ON DELETE CASCADE
@@ -298,10 +298,6 @@ def get_quiz():
 
     rows = cursor.fetchall()
 
-    for row in rows:
-        row['shown_answers'] = parse_answers(row['shown_answers'])
-        row['correct_answer'] = parse_answers(row['correct_answer'])
-
     cursor.close()
     conn.close()
     return jsonify(rows), 200
@@ -333,7 +329,7 @@ def get_questions():
     
     # Build the SQL query dynamically based on the provided parameters
     query = """
-    SELECT qp.*, qc.title, qc.correct_answer, qc.duration, qc.type
+    SELECT qp.*, qc.title, qc.correct_answers, qc.duration, qc.type
     FROM question_posts qp
     JOIN question_contents qc ON qp.id_question = qc.id_question
     """
@@ -355,7 +351,7 @@ def get_questions():
 
     for row in rows:
         row['shown_answers'] = parse_answers(row['shown_answers'])
-        row['correct_answer'] = parse_answers(row['correct_answer'])
+        row['correct_answers'] = parse_answers(row['correct_answers'])
 
     cursor.close()
     conn.close()
@@ -390,7 +386,7 @@ def get_question_content():
 
     for row in rows:
         row['shown_answers'] = parse_answers(row['shown_answers'])
-        row['correct_answer'] = parse_answers(row['correct_answer'])
+        row['correct_answers'] = parse_answers(row['correct_answers'])
 
     cursor.close()
     conn.close()
@@ -426,7 +422,7 @@ def get_myposts():
 
     for question in questions:
         question['shown_answers'] = parse_answers(question['shown_answers'])
-        question['correct_answer'] = parse_answers(question['correct_answer'])
+        question['correct_answers'] = parse_answers(question['correct_answers'])
 
     cursor.close()
     conn.close()
@@ -440,18 +436,12 @@ def verify_xml_structure(xml_file) -> bool:
         if root.tag != 'questionary':
             return False
 
-        title = root.find('title')
-        if title is None:
-            return False
-
         questions_sections = root.findall('questions')
         if not questions_sections:
             return False
 
         for questions in questions_sections:
             question_list = questions.findall('question')
-            if not question_list:
-                return False
 
             for question in question_list:
                 if 'type' not in question.attrib or 'duration' not in question.attrib:
@@ -464,6 +454,7 @@ def verify_xml_structure(xml_file) -> bool:
 
         return True
     except ET.ParseError:
+        print('ET.ParseError')
         return False
 
 def get_quiz_subject_and_language(xml_file):
@@ -490,6 +481,7 @@ def post_quiz():
     file = request.files.get('file')
 
     if not token or not filename or not file:
+        print(not token, not filename, not file)
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str) or not isinstance(filename, str):
         return jsonify({'error': 'Invalid data types'}), 400
@@ -554,13 +546,26 @@ def post_question():
     if not isinstance(question, dict):
         return jsonify({'error': 'Invalid data type for question'}), 400
 
+    # Convert shown_answers and correct_answers to lists
+    shown_answers = parse_answers(question['shown_answers'])
+    correct_answers = parse_answers(question['correct_answers'])
+    if isinstance(shown_answers, dict) and "answer" in shown_answers:
+        shown_answers = shown_answers["answer"]
+    if isinstance(correct_answers, dict) and "answer" in correct_answers:
+        correct_answers = correct_answers["answer"]
+    question['shown_answers'] = str(shown_answers)
+    question['correct_answers'] = str(correct_answers)
+
     required_fields = ['subject', 'language', 'title', 'shown_answers', 'correct_answers', 'duration', 'type']
     for field in required_fields:
         if field not in question:
+            print(f'Missing field: {field}')
             return jsonify({'error': f'Missing field: {field}'}), 400
         if field == 'duration' and not isinstance(question[field], int):
+            print(f'1 - Invalid data type for {field}')
             return jsonify({'error': f'Invalid data type for {field}'}), 400
         elif field != 'duration' and not isinstance(question[field], str):
+            print(f'2 - Invalid data type for {field}')
             return jsonify({'error': f'Invalid data type for {field}'}), 400
 
     if not is_hex(token):
@@ -568,22 +573,17 @@ def post_question():
     if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
-    # Convert shown_answers and correct_answers from strings to lists
-    shown_answers = parse_answers(question['shown_answers'])
-    correct_answers = parse_answers(question['correct_answers'])
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("INSERT INTO question_posts (id_acc, subject, language) VALUES ((SELECT id_acc FROM connexions WHERE token = %s), %s, %s)", (pad_binary_data(bytes.fromhex(token), 32), question['subject'], question['language'],))
-    cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answer, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], json.dumps(shown_answers), json.dumps(correct_answers), question['duration'], question['type'],))
+    cursor.execute("INSERT INTO question_contents (id_question, title, shown_answers, correct_answers, duration, type) VALUES (LAST_INSERT_ID(), %s, %s, %s, %s, %s)", (question['title'], json.dumps(shown_answers), json.dumps(correct_answers), question['duration'], question['type'],))
 
     conn.commit()
     cursor.close()
     conn.close()
 
     return jsonify({'message': 'Question uploaded successfully'}), 200
-
 
 @app.route('/login', methods=['POST'])
 def post_login():
@@ -609,7 +609,13 @@ def post_login():
     if not account or not check_password_hash(account[2], password_hash):
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    # Rest of login logic...
+    # Fetch the token from the connexions table
+    cursor.execute("SELECT token FROM connexions WHERE id_acc = %s", (account[0],))
+    token = cursor.fetchone()
+    if not token:
+        return jsonify({'error': 'No token found for this account'}), 401
+
+    return jsonify({'token': token[0].hex()}), 200
 
 def get_email_config():
     config = configparser.ConfigParser()
