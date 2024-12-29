@@ -236,6 +236,7 @@ def is_valid_token(token):
     Returns:
         bool: True if the token is valid, False otherwise.
     """
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -262,7 +263,6 @@ def get_quiz():
     """
     token = request.args.get('token')
     params = request.args.to_dict(flat=False)
-    print("token: ", token)
     params.pop('token', None)
 
     if not token:
@@ -280,16 +280,29 @@ def get_quiz():
     
     # Build the SQL query dynamically based on the provided parameters
     query = """
-    SELECT *
-    FROM quiz
+    SELECT q.*, ui.name AS username, ui.academy AS user_academy
+    FROM quiz q
+    JOIN user_infos ui ON q.id_acc = ui.id_acc
     WHERE 1=1
     """
     query_params = []
 
     for key, value in params.items():
         if value:
-            query += f" AND {key} LIKE %s"
-            query_params.append(f"%{value[0]}%")
+            if key == "id_acc":
+                value = [v for v in value if v.isdigit()]
+                if value != []:
+                    query += f" AND q.id_acc = %s"
+                    query_params.append(int(value[0]))
+            elif key == "id_question":
+                value = [v for v in value if v.isdigit()]
+                if value != []:
+                    query += f" AND id_question = %s"
+                    query_params.append(int(value[0]))
+            else:
+                query += f" AND {key} LIKE %s"
+                if value != []:
+                    query_params.append(f"%{value[0]}%")
 
     try:
         cursor.execute(query, query_params)
@@ -329,16 +342,25 @@ def get_questions():
     
     # Build the SQL query dynamically based on the provided parameters
     query = """
-    SELECT qp.*, qc.title, qc.correct_answers, qc.duration, qc.type
+    SELECT qp.*, qc.title, qc.correct_answers, qc.shown_answers, qc.duration, qc.type, ui.name AS username, ui.academy AS user_academy
     FROM question_posts qp
     JOIN question_contents qc ON qp.id_question = qc.id_question
+    JOIN user_infos ui ON qp.id_acc = ui.id_acc
+    WHERE 1=1
     """
     query_params = []
 
     for key, value in params.items():
         if value:
-            query += f" AND {key} LIKE %s"
-            query_params.append(f"%{value[0]}%")
+            if key in ["id_question", "id_acc"]:
+                value = [v for v in value if v.isdigit()]
+                if value != []:
+                    query += f" AND qp.{key} = %s"
+                    query_params.append(int(value[0]))
+            else:
+                query += f" AND {key} LIKE %s"
+                if value != []:
+                    query_params.append(f"%{value[0]}%")
 
     try:
         cursor.execute(query, query_params)
@@ -483,7 +505,6 @@ def post_quiz():
     file = request.files.get('file')
 
     if not token or not filename or not file:
-        print(not token, not filename, not file)
         return jsonify({'error': 'Invalid data structure'}), 400
     if not isinstance(token, str) or not isinstance(filename, str):
         return jsonify({'error': 'Invalid data types'}), 400
@@ -561,13 +582,10 @@ def post_question():
     required_fields = ['subject', 'language', 'title', 'shown_answers', 'correct_answers', 'duration', 'type']
     for field in required_fields:
         if field not in question:
-            print(f'Missing field: {field}')
             return jsonify({'error': f'Missing field: {field}'}), 400
         if field == 'duration' and not isinstance(question[field], int):
-            print(f'1 - Invalid data type for {field}')
             return jsonify({'error': f'Invalid data type for {field}'}), 400
         elif field != 'duration' and not isinstance(question[field], str):
-            print(f'2 - Invalid data type for {field}')
             return jsonify({'error': f'Invalid data type for {field}'}), 400
 
     if not is_hex(token):
@@ -587,17 +605,12 @@ def post_question():
 
     return jsonify({'message': 'Question uploaded successfully'}), 200
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['POST']) 
 def post_login():
-    """
-    Authenticates a user by checking their email and password hash.
-
-    Returns:
-        Response: A JSON response indicating success or an error message.
-    """
+    """Handles user login with token management"""
     data = request.get_json()
     email = data.get('email')
-    password_hash = data.get('password_hash') # Hash from client
+    password_hash = data.get('password_hash')
 
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
@@ -605,19 +618,33 @@ def post_login():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Compare with salted hash stored in DB
+    # Verify credentials
     cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
     account = cursor.fetchone()
     if not account or not check_password_hash(account[2], password_hash):
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    # Fetch the token from the connexions table
+    # Generate new token
+    new_token = secrets.token_bytes(32)
+    
+    # Update or insert token
     cursor.execute("SELECT token FROM connexions WHERE id_acc = %s", (account[0],))
-    token = cursor.fetchone()
-    if not token:
-        return jsonify({'error': 'No token found for this account'}), 401
+    existing_token = cursor.fetchone()
+    
+    if existing_token:
+        # Update existing token entry
+        cursor.execute("UPDATE connexions SET token = %s WHERE id_acc = %s", 
+                      (new_token, account[0]))
+    else:
+        # Create new token entry
+        cursor.execute("INSERT INTO connexions (id_acc, token) VALUES (%s, %s)",
+                      (account[0], new_token))
 
-    return jsonify({'token': token[0].hex()}), 200
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({'token': new_token.hex()}), 200
 
 def get_email_config():
     config = configparser.ConfigParser()
@@ -727,7 +754,7 @@ def post_signup():
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", 
                   (email, salted_hash))
     
-    cursor.execute("INSERT INTO user_infos (id_acc, name, academy) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), NULL, NULL)", (email,))
+    cursor.execute("INSERT INTO user_infos (id_acc, name, academy) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, "", ""))
     token = secrets.token_bytes(32)
     cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'signup'))
 
@@ -1053,9 +1080,9 @@ def delete_quiz():
     if not isinstance(token, str) or not isinstance(id_file, int):
         return jsonify({'error': 'Invalid data types'}), 400
 
-    if not is_hex(data['token']):
+    if not is_hex(token):
         return jsonify({'error': 'Token not hexadecimal'}), 401
-    if not is_valid_token(data['token']):
+    if not is_valid_token(token):
         return jsonify({'error': 'Invalid token'}), 401
 
     conn = get_db_connection()
