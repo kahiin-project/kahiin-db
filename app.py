@@ -724,6 +724,8 @@ def post_signup():
     
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", 
                   (email, salted_hash))
+    
+    cursor.execute("INSERT INTO user_infos (id_acc, name, academy) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), NULL, NULL)", (email,))
     token = secrets.token_bytes(32)
     cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'signup'))
 
@@ -930,6 +932,67 @@ def post_reset_password():
     conn.close()
 
     return jsonify({'message': 'Email sent successfully'}), 200
+
+@app.route('/editInfos', methods=['POST'])
+def post_edit_infos():
+    """
+    Edit a user info in the database based on the provided information (name and academy).
+
+    Returns:
+        Response: A JSON response indicating success or an error message.
+    """
+    data = request.get_json()
+    token = data.get('token')
+    name = data.get('name')
+    academy = data.get('academy')
+    
+    if not token:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE user_infos SET name = %s , academy = %s WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (name, academy, pad_binary_data(bytes.fromhex(token), 32),))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'message': "Account's informations  edited successfully"}), 200
+
+@app.route('/getInfos', methods=['POST'])
+def get_infos():
+    """
+    Get a user info from the database based on the provided token.
+
+    Returns:
+        Response: A JSON response with the user informations.
+    """
+    data = request.get_json()
+    token = data.get('token')
+    
+    if not token:
+        return jsonify({'error': 'Invalid data structure'}), 400
+    if not is_hex(token):
+        return jsonify({'error': 'Token not hexadecimal'}), 401
+    if not is_valid_token(token):
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, academy FROM user_infos WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    informations = cursor.fetchone()
+    name = informations[0]
+    academy = informations[1]
+
+    cursor.close()
+    conn.close()
+    return jsonify({'name': name, 'academy': academy}), 200
+
 
 # Modifier la route delete account  
 @app.route('/account', methods=['DELETE']) 
