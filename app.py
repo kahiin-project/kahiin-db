@@ -350,8 +350,10 @@ def get_questions():
     rows = cursor.fetchall()
 
     for row in rows:
-        row['shown_answers'] = parse_answers(row['shown_answers'])
-        row['correct_answers'] = parse_answers(row['correct_answers'])
+        if 'shown_answers' in row:
+            row['shown_answers'] = parse_answers(row['shown_answers'])
+        if 'correct_answers' in row:
+            row['correct_answers'] = parse_answers(row['correct_answers'])
 
     cursor.close()
     conn.close()
