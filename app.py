@@ -457,7 +457,7 @@ def verify_xml_structure(xml_file) -> bool:
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
-        if root.tag != 'questionary':
+        if root.tag != 'quiz':
             return False
 
         questions_sections = root.findall('questions')
