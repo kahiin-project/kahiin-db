@@ -729,6 +729,9 @@ def post_signup():
     email = data.get('email')
     password_hash = data.get('password_hash') # Hash from client
 
+    if password_hash == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855":
+        return jsonify({'error': 'Password can\'t be empty'}), 400
+
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
     
