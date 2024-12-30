@@ -1,0 +1,66 @@
+@font-face {
+    font-family: "Bagnard";
+    src:
+    url("/assets/Bagnard.otf") format("opentype"),
+}
+body {
+    font-family: 'Bagnard', sans-serif;
+    background-color: light-dark(white, #1c1b22);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+.container {
+    padding: 50px;
+    border-radius: 8px;
+    text-align: center;
+    border: solid .5px gray;
+    margin-bottom: 50px;
+}
+h1 {
+    color: #333;
+    margin-bottom: 10px;
+}
+p {
+    color: #666;
+    margin-top: 0;
+}
+.button {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #007BFF;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+}
+.button:hover {
+    background-color: #0056b3;
+}
+img{
+    width: 200px;
+    border-radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #1c1b22;
+    }
+    .container {
+        border: solid .5px white;
+    }
+    h1 {
+        color: #fff;
+    }
+    p {
+        color: #ccc;
+    }
+    .button {
+        background-color: #007BFF;
+        color: #fff;
+    }
+    .button:hover {
+        background-color: #0056b3;
+    }
+}

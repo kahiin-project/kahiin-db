@@ -1,7 +1,7 @@
 import os
 import mysql.connector
 import configparser
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, send_from_directory
 from flask_cors import CORS
 import mysql.connector
 import configparser
@@ -727,19 +727,20 @@ def post_signup():
     """
     data = request.get_json()
     email = data.get('email')
-    password_hash = data.get('password_hash') # Hash from client
+    password_hash = data.get('password_hash')  # Hash from client
+    language = data.get('language')
 
     if password_hash == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855":
-        return jsonify({'error': 'Password can\'t be empty'}), 400
+        return jsonify({'error': "Password can't be empty"}), 400
 
     if not email or not password_hash:
         return jsonify({'error': 'Invalid data structure'}), 400
-    
+
     if not isinstance(email, str):
         return jsonify({'error': 'Invalid data type for email'}), 400
     if not is_authorized_email(email):
         return jsonify({'error': 'Unauthorized email'}), 401
-    
+
     if not isinstance(password_hash, str):
         return jsonify({'error': 'Invalid data type for password_hash'}), 400
 
@@ -748,18 +749,68 @@ def post_signup():
 
     cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
     rows = cursor.fetchall()
-    if(len(rows) > 0):
+    if len(rows) > 0:
         return jsonify({'error': 'Email already in use'}), 409
-    
+
     # Add salt and hash again for storage
     salted_hash = hashlib.sha256((password_hash + salt).encode()).hexdigest()
-    
+
     cursor.execute("INSERT INTO accounts (email, password_hash) VALUES (%s, %s)", 
                   (email, salted_hash))
-    
-    cursor.execute("INSERT INTO user_infos (id_acc, name, academy) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, "", ""))
+
+    cursor.execute("INSERT INTO user_infos (id_acc, name, academy) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", 
+                  (email, "", ""))
     token = secrets.token_bytes(32)
-    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'signup'))
+    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", 
+                  (email, token, 'signup'))
+
+    local_glossary = {
+        "en": {
+            "thank_you": "Thank you for signing up!",
+            "excited": "We are excited to have you on board.",
+            "verify_prompt": "Click the button below to verify your account and get started:",
+            "verify_button": "Verify Your Account",
+            "footer_note": "If you did not sign up for this account, please ignore this email.",
+            "header_title": "You're almost a member of the kahain-db!",
+            "email_subject": "Account Verification"
+        },
+        "fr": {
+            "thank_you": "Merci de vous être inscrit!",
+            "excited": "Nous sommes ravis de vous avoir parmi nous.",
+            "verify_prompt": "Cliquez sur le bouton ci-dessous pour vérifier votre compte et commencer :",
+            "verify_button": "Vérifiez Votre Compte",
+            "footer_note": "Si vous ne vous êtes pas inscrit pour ce compte, veuillez ignorer cet email.",
+            "header_title": "Vous êtes presque membre de la kahain-db!",
+            "email_subject": "Vérification du Compte"
+        },
+        "es": {
+            "thank_you": "¡Gracias por registrarte!",
+            "excited": "Estamos emocionados de tenerte a bordo.",
+            "verify_prompt": "Haz clic en el botón de abajo para verificar tu cuenta y comenzar:",
+            "verify_button": "Verifica Tu Cuenta",
+            "footer_note": "Si no te registraste para esta cuenta, por favor ignora este correo electrónico.",
+            "header_title": "¡Casi eres miembro de la kahain-db!",
+            "email_subject": "Verificación de Cuenta"
+        },
+        "it": {
+            "thank_you": "Grazie per esserti iscritto!",
+            "excited": "Siamo entusiasti di averti con noi.",
+            "verify_prompt": "Clicca sul pulsante sottostante per verificare il tuo account e iniziare:",
+            "verify_button": "Verifica il Tuo Account",
+            "footer_note": "Se non ti sei registrato per questo account, ignora questa email.",
+            "header_title": "Sei quasi un membro di kahain-db!",
+            "email_subject": "Verifica Account"
+        },
+        "de": {
+            "thank_you": "Vielen Dank für Ihre Anmeldung!",
+            "excited": "Wir freuen uns, Sie an Bord zu haben.",
+            "verify_prompt": "Klicken Sie auf die Schaltfläche unten, um Ihr Konto zu verifizieren und zu starten:",
+            "verify_button": "Verifizieren Sie Ihr Konto",
+            "footer_note": "Wenn Sie sich nicht für dieses Konto registriert haben, ignorieren Sie bitte diese E-Mail.",
+            "header_title": "Sie sind fast Mitglied der kahain-db!",
+            "email_subject": "Kontoverifizierung"
+        }
+    }
 
     html_message = f"""
         <html>
@@ -817,22 +868,23 @@ def post_signup():
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>You're almost member of the kahiin-db!</h1>
+                    <h1>{local_glossary.get(language, local_glossary["en"])["header_title"]}</h1>
                 </div>
                 <div class="content">
-                    <h1>Thank you for signing up!</h1>
-                    <p>We are excited to have you on board. Click the button below to verify your account and get started:</p>
-                    <a href="http://localhost:5000/verif?token={token.hex()}" class="button" style="color:white;">Verify Your Account</a>
+                    <h1>{local_glossary.get(language, local_glossary["en"])["thank_you"]}</h1>
+                    <p>{local_glossary.get(language, local_glossary["en"])["excited"]}</p>
+                    <p>{local_glossary.get(language, local_glossary["en"])["verify_prompt"]}</p>
+                    <a href="http://localhost:5000/verif?token={token.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["verify_button"]}</a>
                 </div>
                 <div class="footer">
-                    <p>If you did not sign up for this account, please ignore this email.</p>
-                </div>{token.hex()}
+                    <p>{local_glossary.get(language, local_glossary["en"])["footer_note"]}</p>
+                </div>
             </div>
         </body>
         </html>
     """
 
-    send_email("Account Verification", html_message, email)
+    send_email(local_glossary.get(language, local_glossary["en"])["email_subject"], html_message, email)
 
     conn.commit()
     cursor.close()
@@ -850,6 +902,7 @@ def post_reset_password():
     """
     data = request.get_json()
     token = data.get('token')
+    language = data.get('language')
 
     if not token:
         return jsonify({'error': 'Invalid data structure'}), 400
@@ -867,7 +920,7 @@ def post_reset_password():
     if not email:
         return jsonify({'error': 'Email not found'}), 404
     
-    new_password_hash = data.get('new_password_hash') # Hash from client
+    new_password_hash = data.get('new_password_hash')  # Hash from client
     salted_hash = hashlib.sha256((new_password_hash + salt).encode()).hexdigest()
 
     if not new_password_hash:
@@ -875,8 +928,8 @@ def post_reset_password():
     if not isinstance(new_password_hash, str):
         return jsonify({'error': 'Invalid data type for new_password_hash'}), 400
     
-    token = secrets.token_bytes(32)
-    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token, 'reset_password'))
+    token_verif = secrets.token_bytes(32)
+    cursor.execute("INSERT INTO verifications (id_acc, token, type) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s, %s)", (email, token_verif, 'reset_password'))
     # Check if an entry already exists in waiting_passwords
     cursor.execute("SELECT id_acc FROM waiting_passwords WHERE id_acc = (SELECT id_acc FROM accounts WHERE email = %s)", (email,))
     existing_entry = cursor.fetchone()
@@ -885,6 +938,49 @@ def post_reset_password():
         cursor.execute("UPDATE waiting_passwords SET password_hash = %s WHERE id_acc = %s", (salted_hash, existing_entry[0]))
     else:
         cursor.execute("INSERT INTO waiting_passwords (id_acc, password_hash) VALUES ((SELECT id_acc FROM accounts WHERE email = %s), %s)", (email, salted_hash))
+
+    local_glossary = {
+        "en": {
+            "subject": "Password Reset",
+            "heading": "Reset Your Password",
+            "message": "Click the button below to reset your password:",
+            "button_text": "Reset Password",
+            "footer_note": "If you did not request a password reset, please ignore this email.",
+            "forgot_password": "Forgot your password?"
+        },
+        "fr": {
+            "subject": "Réinitialisation du Mot de Passe",
+            "heading": "Réinitialisez Votre Mot de Passe",
+            "message": "Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe :",
+            "button_text": "Réinitialiser le Mot de Passe",
+            "footer_note": "Si vous n'avez pas demandé de réinitialisation de mot de passe, veuillez ignorer cet e-mail.",
+            "forgot_password": "Mot de passe oublié?"
+        },
+        "es": {
+            "subject": "Restablecimiento de Contraseña",
+            "heading": "Restablece Tu Contraseña",
+            "message": "Haz clic en el botón de abajo para restablecer tu contraseña:",
+            "button_text": "Restablecer Contraseña",
+            "footer_note": "Si no solicitaste un restablecimiento de contraseña, por favor ignora este correo electrónico.",
+            "forgot_password": "¿Olvidaste tu contraseña?"
+        },
+        "it": {
+            "subject": "Reimposta Password",
+            "heading": "Reimposta la Tua Password",
+            "message": "Clicca sul pulsante sottostante per reimpostare la tua password:",
+            "button_text": "Reimposta Password",
+            "footer_note": "Se non hai richiesto il reimpostamento della password, ignora questa email.",
+            "forgot_password": "Hai dimenticato la tua password?"
+        },
+        "de": {
+            "subject": "Passwort Zurücksetzen",
+            "heading": "Setzen Sie Ihr Passwort Zurück",
+            "message": "Klicken Sie auf die Schaltfläche unten, um Ihr Passwort zurückzusetzen:",
+            "button_text": "Passwort Zurücksetzen",
+            "footer_note": "Wenn Sie kein Passwort-Zurücksetzen angefordert haben, ignorieren Sie bitte diese E-Mail.",
+            "forgot_password": "Passwort vergessen?"
+        }
+    }
 
     html_message = f"""
         <html>
@@ -942,22 +1038,22 @@ def post_reset_password():
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Reset Your Password</h1>
+                    <h1>{local_glossary.get(language, local_glossary["en"])["heading"]}</h1>
                 </div>
                 <div class="content">
-                    <h1>Forgot your password?</h1>
-                    <p>Click the button below to reset your password:</p>
-                    <a href="http://localhost:5000/verif?token={token.hex()}" class="button" style="color:white;">Reset Password</a>
+                    <h1>{local_glossary.get(language, local_glossary["en"])["forgot_password"]}</h1>
+                    <p>{local_glossary.get(language, local_glossary["en"])["message"]}</p>
+                    <a href="http://localhost:5000/verif?token={token_verif.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["button_text"]}</a>
                 </div>
                 <div class="footer">
-                    <p>If you did not request a password reset, please ignore this email.</p>
+                    <p>{local_glossary.get(language, local_glossary["en"])["footer_note"]}</p>
                 </div>
             </div>
         </body>
         </html>
     """
 
-    send_email("Password Reset", html_message, email)
+    send_email(local_glossary.get(language, local_glossary["en"])["subject"], html_message, email)
 
     conn.commit()
     cursor.close()
@@ -1162,6 +1258,7 @@ def verification_attempt():
     Verifies the account based on the provided token.
     """
     token = request.args.get('token')
+    language = request.args.get('language')
     if not token:
         return jsonify({'error': 'Token is required'}), 400
     
@@ -1171,7 +1268,10 @@ def verification_attempt():
     cursor.execute("SELECT * FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32), ))
     rows = cursor.fetchall()
     if len(rows) == 0:
-        return jsonify({'error': 'Invalid token'}), 401
+        if language in ['en', 'fr', 'es', 'it', 'de']:
+            return render_template('invalid_token/' + language + '.html'), 401
+        else:
+            return render_template('invalid_token/en.html'), 401
     
     type = rows[0][2]
 
@@ -1182,7 +1282,10 @@ def verification_attempt():
             conn.commit()
             cursor.close()
             conn.close()
-            return render_template("account_created.html"), 200
+            if language in ['en', 'fr', 'es', 'it', 'de']:
+                return render_template('account_created/' + language + '.html'), 200
+            else:
+                return render_template('account_created/en.html'), 200
         case 'reset_password':
             cursor.execute("DELETE FROM verifications WHERE token = %s", (pad_binary_data(bytes.fromhex(token), 32),))
             cursor.execute("SELECT password_hash FROM waiting_passwords WHERE id_acc = %s", (rows[0][0],))
@@ -1193,9 +1296,24 @@ def verification_attempt():
             conn.commit()
             cursor.close()
             conn.close()
-            return render_template("password_reset.html"), 200
+            if language in ['en', 'fr', 'es', 'it', 'de']:
+                print("Language exists")
+                return render_template('password_reset/' + language + '.html'), 200
+            else:
+                print("Language does not exist: " + 'password_reset/' + language + '.html')
+                return render_template('password_reset/en.html'), 200
         case _:
             return jsonify({'error': 'Invalid type'}), 400
+
+@app.route('/assets/<asset>', methods=['GET'])
+def get_asset(asset):
+    """
+    Retrieves an asset file based on the provided filename.
+
+    Returns:
+        Response: A file response or an error message.
+    """
+    return send_from_directory('assets', asset)
 
 @app.route('/download', methods=['GET'])
 def download():
