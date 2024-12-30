@@ -1016,14 +1016,15 @@ def get_infos():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT name, academy FROM user_infos WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
+    cursor.execute("SELECT name, academy, id_acc FROM user_infos WHERE id_acc IN (SELECT id_acc FROM connexions WHERE token = %s)", (pad_binary_data(bytes.fromhex(token), 32),))
     informations = cursor.fetchone()
     name = informations[0]
     academy = informations[1]
+    id_acc = informations[2]
 
     cursor.close()
     conn.close()
-    return jsonify({'name': name, 'academy': academy}), 200
+    return jsonify({'name': name, 'academy': academy, 'id_acc': id_acc}), 200
 
 
 # Modifier la route delete account  
