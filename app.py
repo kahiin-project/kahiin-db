@@ -19,8 +19,12 @@ import uuid
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import io
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 
-password = sys.argv[1]
+encryption_key = sys.argv[1]
+password = encryption_key
 salt = ""
 
 # Modifier la fonction de vérification du hash
@@ -79,38 +83,115 @@ app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'quizFiles')
 
+# Function to read encrypted configuration
+def read_encrypted_config(encryption_key):
+    """
+    Reads and decrypts the configuration file.
+    
+    Args:
+        encryption_key (str): The key used to decrypt the configuration
+        
+    Returns:
+        configparser.ConfigParser: The decrypted configuration
+    """
+    try:
+        with open(CONFIG_FILE, 'rb') as f:
+            data = f.read()
+            
+        # Extract IV and encrypted data
+        iv = data[:AES.block_size]
+        encrypted_data = data[AES.block_size:]
+        
+        # Prepare key for decryption
+        key_bytes = hashlib.sha256(encryption_key.encode()).digest()[:16]
+        cipher = AES.new(key_bytes, AES.MODE_CBC, iv)
+        
+        # Decrypt data
+        decrypted_data = unpad(cipher.decrypt(encrypted_data), AES.block_size)
+        
+        # Parse decrypted configuration
+        config = configparser.ConfigParser()
+        config.read_string(decrypted_data.decode())
+        return config
+    except Exception as e:
+        print(f"Error reading encrypted configuration: {e}")
+        return None
+
+# Function to write encrypted configuration
+def write_encrypted_config(config, encryption_key):
+    """
+    Encrypts and writes the configuration to file.
+    
+    Args:
+        config (configparser.ConfigParser): The configuration to encrypt
+        encryption_key (str): The key to use for encryption
+    """
+    try:
+        # Convert config to string
+        config_string = io.StringIO()
+        config.write(config_string)
+        config_content = config_string.getvalue()
+        config_string.close()
+        
+        # Prepare encryption
+        key_bytes = hashlib.sha256(encryption_key.encode()).digest()[:16]
+        iv = os.urandom(AES.block_size)
+        cipher = AES.new(key_bytes, AES.MODE_CBC, iv)
+        
+        # Encrypt the content
+        from Crypto.Util.Padding import pad
+        encrypted_data = cipher.encrypt(pad(config_content.encode(), AES.block_size))
+        
+        # Write to file
+        with open(CONFIG_FILE, 'wb') as f:
+            f.write(iv + encrypted_data)
+            
+    except Exception as e:
+        print(f"Error writing encrypted configuration: {e}")
+
 # Function to read connection information
-def get_mysql_config():
-    config = configparser.ConfigParser()
-    if os.path.exists(CONFIG_FILE):
-        config.read(CONFIG_FILE)
-        return {
-            'host': config.get('mysql', 'host', fallback='localhost'),
-            'user': config.get('mysql', 'user'),
-            'password': config.get('mysql', 'password'),
-            'database': config.get('mysql', 'database')
-        }
-    else:
-        host = input("MySQL Host (default: localhost): ") or 'localhost'
-        user = input("MySQL Username: ")
-        password = input("MySQL Password: ")
-        database = input("Database Name: ")
-
-        config.add_section('mysql')
-        config.set('mysql', 'host', host)
-        config.set('mysql', 'user', user)
-        config.set('mysql', 'password', password)
-        config.set('mysql', 'database', database)
-
-        with open(CONFIG_FILE, 'w') as configfile:
-            config.write(configfile)
-
-        return {
-            'host': host,
-            'user': user,
-            'password': password,
-            'database': database
-        }
+def get_mysql_config(encryption_key=None):
+    """
+    Gets MySQL connection information from the encrypted configuration file.
+    
+    Args:
+        encryption_key (str, optional): The key to decrypt the configuration
+        
+    Returns:
+        dict: MySQL connection parameters
+    """
+    if os.path.exists(CONFIG_FILE) and encryption_key:
+        config = read_encrypted_config(encryption_key)
+        if config and 'Database' in config:
+            return {
+                'host': config.get('Database', 'host', fallback='127.0.0.1'),
+                'user': config.get('Database', 'user'),
+                'password': config.get('Database', 'password'),
+                'database': config.get('Database', 'database')
+            }
+    
+    # Fallback to manual configuration if file doesn't exist or can't be decrypted
+    host = input("MySQL Host (default: 127.0.0.1): ") or '127.0.0.1'
+    user = input("MySQL Username: ")
+    password = input("MySQL Password: ")
+    database = input("Database Name: ")
+    
+    # If we have an encryption key, save the new config encrypted
+    if encryption_key:
+        config = configparser.ConfigParser()
+        config.add_section('Database')
+        config.set('Database', 'host', host)
+        config.set('Database', 'user', user)
+        config.set('Database', 'password', password)
+        config.set('Database', 'database', database)
+        write_encrypted_config(config, encryption_key)
+    
+    return {
+        'host': host,
+        'user': user,
+        'password': password,
+        'database': database
+    }
 
 # Function to establish a MySQL connection
 def get_db_connection():
@@ -120,7 +201,7 @@ def get_db_connection():
     Returns:
         mysql.connector.connection.MySQLConnection: The MySQL database connection.
     """
-    config = get_mysql_config()
+    config = get_mysql_config(encryption_key)
     return mysql.connector.connect(
         host=config['host'],
         user=config['user'],
@@ -129,7 +210,7 @@ def get_db_connection():
     )
 
 # Existing code to get MySQL configuration
-config = get_mysql_config()
+config = get_mysql_config(encryption_key)
 
 try:
     # Connect to the MySQL database
@@ -646,33 +727,52 @@ def post_login():
 
     return jsonify({'token': new_token.hex()}), 200
 
-def get_email_config():
-    config = configparser.ConfigParser()
-    if os.path.exists(CONFIG_FILE):
-        config.read(CONFIG_FILE)
-        if 'email' in config:
+# Remplacer la fonction get_email_config existante par celle-ci:
+
+def get_email_config(encryption_key=None):
+    """
+    Gets email configuration from the encrypted configuration file.
+    
+    Args:
+        encryption_key (str, optional): The key to decrypt the configuration
+        
+    Returns:
+        dict: Email configuration parameters
+    """
+    if os.path.exists(CONFIG_FILE) and encryption_key:
+        config = read_encrypted_config(encryption_key)
+        if config and 'Email' in config and 'SMTP' in config:
             return {
-                'sender': config.get('email', 'sender'),
-                'password': config.get('email', 'password'),
-                'smtp_server': config.get('email', 'smtp_server'),
-                'smtp_port': config.getint('email', 'smtp_port')
+                'sender': config.get('Email', 'email'),
+                'password': config.get('Email', 'password'),
+                'smtp_server': config.get('SMTP', 'server'),
+                'smtp_port': config.getint('SMTP', 'port')
             }
     
-    # If the section does not exist or the file does not exist, ask the user for input
+    # Fallback to manual configuration if file doesn't exist or can't be decrypted
     email = input("Email: ")
     password = input("Email Password: ")
     smtp_server = input("SMTP Server: ")
     smtp_port = int(input("SMTP Port: "))
-
-    config.add_section('email')
-    config.set('email', 'sender', email)
-    config.set('email', 'password', password)
-    config.set('email', 'smtp_server', smtp_server)
-    config.set('email', 'smtp_port', str(smtp_port))
-
-    with open(CONFIG_FILE, 'w') as configfile:
-        config.write(configfile)
-
+    
+    # If we have an encryption key, save the new config encrypted
+    if encryption_key:
+        config = configparser.ConfigParser()
+        if os.path.exists(CONFIG_FILE):
+            config = read_encrypted_config(encryption_key) or config
+            
+        if 'Email' not in config:
+            config.add_section('Email')
+        if 'SMTP' not in config:
+            config.add_section('SMTP')
+            
+        config.set('Email', 'email', email)
+        config.set('Email', 'password', password)
+        config.set('SMTP', 'server', smtp_server)
+        config.set('SMTP', 'port', str(smtp_port))
+        
+        write_encrypted_config(config, encryption_key)
+    
     return {
         'sender': email,
         'password': password,
@@ -680,7 +780,12 @@ def get_email_config():
         'smtp_port': smtp_port
     }
 
-email_config = get_email_config()
+# Modifier l'initialisation email_config
+# Remplacer cette ligne:
+# email_config = get_email_config()
+# Par celle-ci:
+email_config = get_email_config(encryption_key)
+
 def send_email(subject, message, recipient):
     sender = email_config['sender']
     password = email_config['password']
@@ -874,7 +979,7 @@ def post_signup():
                     <h1>{local_glossary.get(language, local_glossary["en"])["thank_you"]}</h1>
                     <p>{local_glossary.get(language, local_glossary["en"])["excited"]}</p>
                     <p>{local_glossary.get(language, local_glossary["en"])["verify_prompt"]}</p>
-                    <a href="http://localhost:5000/verif?token={token.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["verify_button"]}</a>
+                    <a href="http://127.0.0.1:5000/verif?token={token.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["verify_button"]}</a>
                 </div>
                 <div class="footer">
                     <p>{local_glossary.get(language, local_glossary["en"])["footer_note"]}</p>
@@ -1043,7 +1148,7 @@ def post_reset_password():
                 <div class="content">
                     <h1>{local_glossary.get(language, local_glossary["en"])["forgot_password"]}</h1>
                     <p>{local_glossary.get(language, local_glossary["en"])["message"]}</p>
-                    <a href="http://localhost:5000/verif?token={token_verif.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["button_text"]}</a>
+                    <a href="http://127.0.0.1:5000/verif?token={token_verif.hex()}&language={language}" class="button" style="color:white;">{local_glossary.get(language, local_glossary["en"])["button_text"]}</a>
                 </div>
                 <div class="footer">
                     <p>{local_glossary.get(language, local_glossary["en"])["footer_note"]}</p>

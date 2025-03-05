@@ -5,7 +5,7 @@ if [ "$(uname)" == "Linux" ]; then
         # Debian/Ubuntu Based
         yes | sudo apt-get update
         yes | sudo apt-get install python3 python3-pip python3-venv
-        yes | sudo apt-get install libmysqlclient-dev  # Ajout de cette ligne
+        yes | sudo apt-get install libmysqlclient-dev
         python3 -m venv venv
         source venv/bin/activate
         yes | pip install -r requirements.txt
@@ -18,7 +18,7 @@ if [ "$(uname)" == "Linux" ]; then
         echo
         yes | sudo pacman -Syu
         yes | sudo pacman -S python3 python-pip python-virtualenv
-        yes | sudo pacman -S mariadb-libs  # Ajout de cette ligne
+        yes | sudo pacman -S mariadb-libs
         python3 -m venv venv
         source venv/bin/activate
         yes | pip install -r requirements.txt
