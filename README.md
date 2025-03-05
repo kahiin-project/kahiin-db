@@ -22,6 +22,48 @@ Kahiin-DB is a free marketplace for stocking [Kahiin](https://github.com/kahiin-
 
 ### Installation
 
+### Easy way (Docker)
+1. Install Docker [here](https://docs.docker.com/get-docker/).
+
+2. Clone the repository:
+    ```sh
+    git clone
+    cd kahiin-db
+    ```
+
+3. Build the Docker image:
+    ```sh
+    sudo docker build \
+    --build-arg DB_NAME=kahiin_db \
+    --build-arg DB_USER=kahiin_user \
+    --build-arg DB_PASSWORD=strong_password_123 \
+    --build-arg DB_HOST=127.0.0.1 \
+    --build-arg CONFIG_ENCRYPTION_KEY=your_secure_encryption_key \
+    --build-arg EMAIL=notification@example.com \
+    --build-arg EMAIL_PASSWORD=email_password_123 \
+    --build-arg SMTP_SERVER=smtp.example.com \
+    --build-arg SMTP_PORT=587 \
+    -t kahiin-db:latest .
+    ```
+    - **DB_NAME**: The name of the database.
+    - **DB_USER**: The username for the database.
+    - **DB_PASSWORD**: The password for the database.
+    - **DB_HOST**: The host for the database.
+    - **CONFIG_ENCRYPTION_KEY**: The encryption key for the configuration file.
+    - **EMAIL**: The email address for notifications.
+    - **EMAIL_PASSWORD**: The password for the email address. 
+    - **SMTP_SERVER**: The SMTP server for sending emails.
+    - **SMTP_PORT**: The SMTP port for sending emails.
+
+4. Run the Docker container:
+    ```sh
+    sudo docker volume create kahiin-db-data
+    sudo docker run -d --name kahiin-db --network=host -v kahiin-db-data:/var/lib/mysql -e CONFIG_ENCRYPTION_KEY="your_secure_encryption_key" kahiin-db:latest
+    ```
+    - **CONFIG_ENCRYPTION_KEY**: The encryption key for the configuration file.
+
+### Manual Installation
+
 1. Clone the repository:
     ```sh
     git clone https://github.com/kahiin-project/kahiin-db.git
@@ -49,6 +91,7 @@ Kahiin-DB is a free marketplace for stocking [Kahiin](https://github.com/kahiin-
     - Creates a new database and a new MySQL user.
 
     During the execution of the script, you will be prompted to provide a database name, a username, and a password.
+
 
 ## Running the Application
 
