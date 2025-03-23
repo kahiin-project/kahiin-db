@@ -2,3 +2,4 @@ venv/
 config.ini
 quizFiles/
 .passwordcheck
+.*
