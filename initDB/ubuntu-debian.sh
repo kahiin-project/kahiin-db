@@ -1,134 +1,86 @@
 #!/bin/bash
 
-# Update the package list
-sudo dpkg --configure -a
+if [ $# -ne 10 ]; then
+    echo "Usage: $0 <db_name> <db_user> <db_password> <db_host> <email> <email_password> <smtp_server> <smtp_port> <encryption_key> <root_password>"
+    exit 1
+fi
 
-# Install MySQL
-sudo apt-get install -y mysql-server
+db_name="$1"
+user_name="$2"
+user_pass="$3"
+db_host="$4"
+email="$5"
+email_password="$6"
+smtp_server="$7"
+smtp_port="$8"
+encryption_key="$9"
+root_password="${10}"
 
-# Clean up any previous MySQL installations
-sudo apt autoremove --purge -y mysql-server* mariadb-server*
-sudo rm -rf /var/lib/mysql /etc/mysql/
-sudo mkdir -p /etc/mysql/conf.d
-
-# Reinstall MySQL server
-sudo apt install -y mysql-server
-
-# Start the MySQL service
-sudo systemctl start mysql
-
-# Function to validate database name
-validate_db_name() {
-    if [[ "$1" =~ ^[a-zA-Z0-9_]+$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+validate_alphanum() {
+    [[ "$1" =~ ^[a-zA-Z0-9_]+$ ]]
 }
 
-# Function to validate email
 validate_email() {
-    if [[ "$1" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+    [[ "$1" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]
 }
 
-# Function to validate port number
 validate_port() {
-    if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; then
-        return 0
-    else
-        return 1
-    fi
+    [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
 }
 
-# Function to validate encryption key
 validate_key() {
-    if [ ${#1} -ge 16 ]; then
-        return 0
-    else
-        return 1
-    fi
+    [ ${#1} -ge 16 ]
 }
 
-# Create a new database
-while true; do
-    read -p "Database name: " db_name
-    if validate_db_name "$db_name"; then
-        sudo mysql -e "CREATE DATABASE $db_name;"
-        break
-    else
-        echo "Invalid database name. Only alphanumeric characters and underscores are allowed."
-    fi
-done
+if ! validate_alphanum "$db_name"; then
+    echo "Invalid database name. Exiting."
+    exit 1
+fi
 
-# Create a new user
-while true; do
-    read -p "Database username: " user_name
-    if validate_db_name "$user_name"; then
-        break
-    else
-        echo "Invalid username. Only alphanumeric characters and underscores are allowed."
-    fi
-done
+if ! validate_alphanum "$user_name"; then
+    echo "Invalid username. Exiting."
+    exit 1
+fi
 
-# Collect database password
-read -s -p "Database password: " user_pass
-echo
+if ! validate_email "$email"; then
+    echo "Invalid email. Exiting."
+    exit 1
+fi
 
-# Collect database host
-read -p "Database host [localhost]: " db_host
-db_host=${db_host:-localhost}
+if ! validate_port "$smtp_port"; then
+    echo "Invalid port. Exiting."
+    exit 1
+fi
 
-# Grant privileges to the user
-sudo mysql -e "CREATE USER '$user_name'@'$db_host' IDENTIFIED BY '$user_pass';"
-sudo mysql -e "GRANT ALL PRIVILEGES ON $db_name.* TO '$user_name'@'$db_host';"
-sudo mysql -e "FLUSH PRIVILEGES;"
+if ! validate_key "$encryption_key"; then
+    echo "Invalid encryption key. Exiting."
+    exit 1
+fi
 
-# Collect email information
-while true; do
-    read -p "Email address: " email
-    if validate_email "$email"; then
-        break
-    else
-        echo "Invalid email format. Please try again."
-    fi
-done
+sudo dpkg --configure -a > /dev/null 2>&1
+sudo apt-get install -y mysql-server > /dev/null 2>&1
+sudo apt autoremove --purge -y mysql-server* mariadb-server* > /dev/null 2>&1
+sudo rm -rf /var/lib/mysql /etc/mysql/ > /dev/null 2>&1
+sudo mkdir -p /etc/mysql/conf.d > /dev/null 2>&1
+sudo apt install -y mysql-server > /dev/null 2>&1
+sudo systemctl start mysql > /dev/null 2>&1
 
-# Collect email password
-read -s -p "Email password: " email_password
-echo
+# Automatiser la sécurisation de MariaDB
+sudo mysql -e "UPDATE mysql.user SET Password=PASSWORD('$root_password') WHERE User='root';" > /dev/null 2>&1
+sudo mysql -e "DELETE FROM mysql.user WHERE User='';" > /dev/null 2>&1
+sudo mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" > /dev/null 2>&1
+sudo mysql -e "DROP DATABASE IF EXISTS test;" > /dev/null 2>&1
+sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" > /dev/null 2>&1
+sudo mysql -e "FLUSH PRIVILEGES;" > /dev/null 2>&1
 
-# Collect SMTP server
-read -p "SMTP server: " smtp_server
+sudo mysql -u root -p"$root_password" -e "CREATE DATABASE IF NOT EXISTS $db_name;" > /dev/null 2>&1
+sudo mysql -u root -p"$root_password" -e "CREATE USER '$user_name'@'$db_host' IDENTIFIED BY '$user_pass';" > /dev/null 2>&1
+sudo mysql -u root -p"$root_password" -e "GRANT ALL PRIVILEGES ON $db_name.* TO '$user_name'@'$db_host';" > /dev/null 2>&1
+sudo mysql -u root -p"$root_password" -e "FLUSH PRIVILEGES;" > /dev/null 2>&1
 
-# Collect SMTP port
-while true; do
-    read -p "SMTP port [587]: " smtp_port
-    smtp_port=${smtp_port:-587}
-    if validate_port "$smtp_port"; then
-        break
-    else
-        echo "Invalid port number. Please enter a number between 1 and 65535."
-    fi
-done
-
-# Collect encryption key
-while true; do
-    read -s -p "Encryption key (at least 16 characters): " encryption_key
-    echo
-    if validate_key "$encryption_key"; then
-        break
-    else
-        echo "Encryption key must be at least 16 characters long for security."
-    fi
-done
-
-# Create the encrypted configuration file
-echo "Creating encrypted configuration file..."
-python config-maker.py "$user_pass" "$db_host" "$user_name" "$db_name" "$email" "$email_password" "$smtp_server" "$smtp_port" "$encryption_key"
+python config-maker.py "$user_pass" "$db_host" "$user_name" "$db_name" "$email" "$email_password" "$smtp_server" "$smtp_port" "$encryption_key" > /dev/null 2>&1
 
 echo "MySQL has been successfully installed and configured!"
 echo "Configuration file has been encrypted with your key."
+
+exit 0
